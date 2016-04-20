@@ -12,14 +12,14 @@ class MinHash(object):
         """
         :param number_hash_functions: Int >= 1
         """
-        self._m_prime = (1 << 89) - 1  # (x << n) is x shifted left by n bit
+        self._mersenne_prime = (1 << 89) - 1  # (x << n) is x shifted left by n bit
         self._max_hash = (1 << 62) - 1  # BARNES: Changed from 64 --> 62
         random.seed(427)
-        self._a, self._b = np.array([(random.randint(1, self._m_prime), random.randint(0, self._m_prime)) for _ in xrange(number_hash_functions)]).T
+        self._a, self._b = np.array([(random.randint(1, self._mersenne_prime), random.randint(0, self._mersenne_prime)) for _ in xrange(number_hash_functions)]).T
         self._number_hash_functions = number_hash_functions
         self.signatures = dict()
 
-    def hash_corpus(self, file_name, delimiter=' ', headers=0, doc_id_0=1):
+    def hash_corpus(self, file_name, delimiter=' ', headers=0, doc_id_0=0):
         """
         Apply MinHash to a raw text file, and documents to dataset
         :param file_name: String, path to file name
@@ -32,7 +32,6 @@ class MinHash(object):
             for line in ins:
                 if doc_id >= doc_id_0:
                     tokens = frozenset(line.rstrip('\n').split(delimiter))
-                    print(tokens)
                     self.signatures[doc_id] = self._hash_document(tokens)
                 doc_id += 1
 
@@ -56,7 +55,7 @@ class MinHash(object):
         """
         hv = int(sha1(token).hexdigest(), 16) % (10 ** 12)
         # Do Carter and Wegman like hashing.
-        values = np.bitwise_and((self._a * hv + self._b) % self._m_prime, self._max_hash)
+        values = np.bitwise_and((self._a * hv + self._b) % self._mersenne_prime, self._max_hash)
         return values
 
     def jaccard(self, id1, id2):
@@ -81,9 +80,18 @@ class Banding(object):
         """
         self._threshold = threshold
         bandwidth = self._calculate_bandwidth(number_hash_functions, self._threshold)
-        self._number_bands = number_hash_functions/bandwidth
-        self._band_to_docs = dict()
-        self._doc_to_bands = dict()
+        self._number_bands_per_doc = number_hash_functions / bandwidth
+        self.band_to_docs = dict()
+        self.doc_to_bands = dict()
+        print 'Initialized bands with ' + str(self._number_bands_per_doc) + ' bands per document.'
+
+    @property
+    def number_bands(self):
+        return len(self.band_to_docs)
+
+    @property
+    def number_docs_in_bands(self):
+        return len(self.doc_to_bands)*self._number_bands_per_doc
 
     def get_threshold(self):
         """
@@ -99,6 +107,7 @@ class Banding(object):
         """
         for doc_id, signature in signatures.iteritems():
             self._add_signature(doc_id, signature)
+        print 'Added ' + str(len(signatures)) + ' documents to the banding. Total of ' + str(self.number_bands) + ' bands with ' + str(self.number_docs_in_bands) + ' stored doc ids (including repeated elements in different bands.'
 
     def _add_signature(self, doc_id, signature):
         """
@@ -106,16 +115,16 @@ class Banding(object):
         :param doc_id: Document ID
         :param signature: numpy vector of a single document's minhash signature
         """
-        if doc_id not in self._doc_to_bands:
+        if doc_id not in self.doc_to_bands:
             bands = set()
-            for i, raw_band in enumerate(np.array_split(signature, self._number_bands)):
+            for i, raw_band in enumerate(np.array_split(signature, self._number_bands_per_doc)):
                 band = sha1("ab" + str(raw_band) + "ba"+str(i)).digest()
                 bands.add(band)
-                if band in self._band_to_docs:
-                    self._band_to_docs[band].add(doc_id)
+                if band in self.band_to_docs:
+                    self.band_to_docs[band].add(doc_id)
                 else:
-                    self._band_to_docs[band] = {doc_id}
-            self._doc_to_bands[doc_id] = bands
+                    self.band_to_docs[band] = {doc_id}
+            self.doc_to_bands[doc_id] = bands
         else:
             raise KeyError('Attempted to add same document multiple times')
 
@@ -124,14 +133,14 @@ class Banding(object):
         :param band_key: String
         :return doc_ids: Set of document ids
         """
-        return self._band_to_docs[band_key]
+        return self.band_to_docs[band_key]
 
     def doc_to_bands(self, doc_key):
         """
         :param doc_key: Document ID
         :return bands: Set of strings, bands this document belongs to
         """
-        return self._doc_to_bands[doc_key]
+        return self.doc_to_bands[doc_key]
 
     @staticmethod
     def _calculate_bandwidth(number_hash_functions, threshold):
