@@ -29,7 +29,7 @@ class MyTestCase(unittest.TestCase):
         np.testing.assert_array_equal(self.minhash._hash_document(doc1), self.minhash._hash_document(doc3))
 
     def test_hash_corpus(self):
-        self.minhash.hash_corpus('/test/cranewife.txt', headers=1)
+        self.minhash.hash_corpus('test/cranewife.txt', headers=1)
         doc0 = frozenset('And under the boughs unbowed. All clothed in a snowy shroud. She had no heart so hardened. All under the boughs unbowed.'.split(' '))
         doc1 = frozenset('Each feather it fell from skin. Till threadbare while she grew thin. How were my eyes so blinded? Each feather it fell from skin.'.split(' '))
         doc2 = doc0
@@ -57,14 +57,14 @@ class MyTestCase(unittest.TestCase):
         self.assertAlmostEqual(j, 10./30, delta=0.05)
 
     def test_add_signature(self):
-        self.minhash.hash_corpus('/test/cranewife.txt', headers=1)
+        self.minhash.hash_corpus('test/cranewife.txt', headers=1)
         self.banding._add_signature(7, self.minhash.signatures[0])
         self.banding._add_signature(11, self.minhash.signatures[2])
         self.assertEqual(len(self.banding.doc_to_bands), 2)
         self.assertEqual(7 in self.banding.band_to_docs[self.banding.doc_to_bands[7].pop()], True)
 
     def test_add_signatures(self):
-        self.minhash.hash_corpus('/test/cranewife.txt', headers=1)
+        self.minhash.hash_corpus('test/cranewife.txt', headers=1)
         self.banding.add_signatures(self.minhash.signatures)
         self.assertEqual(len(self.banding.doc_to_bands), 3)
         self.assertEqual(0 in self.banding.band_to_docs[self.banding.doc_to_bands[0].pop()], True)
