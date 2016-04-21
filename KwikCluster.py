@@ -1,4 +1,44 @@
 from copy import deepcopy
+import cProfile
+from MinHash import MinHash
+from MinHash import Banding
+import sys
+import getopt
+
+
+def main(argv):
+    number_hash_functions = 200
+    threshold = 0.9
+    header_lines = 0
+    helpline = 'test.py -i <inputfile> -o <outputfile> -d <numberheaderlines> -t <threshold> -f <numberhashfunctions>'
+    try:
+        opts, args = getopt.getopt(argv, "h:i:o:d:t:f:", ["ifile=", "ofile=", "headerlines=", "threshold=", "hashfunctions="])
+    except getopt.GetoptError:
+        print helpline
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h':
+            print helpline
+            sys.exit()
+        elif opt in ("-i", "--ifile"):
+            input_file = arg
+        elif opt in ("-o", "--ofile"):
+            output_file = arg
+        elif opt in ("-d", "--headerlines"):
+            header_lines = int(arg)
+        elif opt in ("-t", "--threshold"):
+            threshold = float(arg)
+        elif opt in ("-f", "--hashfunctions"):
+            number_hash_functions = int(arg)
+    minhash = MinHash(number_hash_functions)
+    minhash.hash_corpus(input_file, headers=header_lines)
+    bands = Banding(number_hash_functions, threshold)
+    bands.add_signatures(minhash.signatures)
+    clusters = kwik_cluster(minhash, bands, threshold)
+    with open(output_file, 'w') as ins:
+        for cluster in clusters:
+            line = ' '.join([str(doc_id) for doc_id in cluster])
+            ins.write(line + '\n')
 
 
 def kwik_cluster(minhash, bands_original, threshold, destructive=True):
@@ -55,5 +95,9 @@ def clean(bands, doc_id):
     id_bands = bands.doc_to_bands.pop(doc_id)
     for band in id_bands:
         bands.band_to_docs[band].remove(doc_id)
+
+
+if __name__ == '__main__':
+    cProfile.run('main(sys.argv[1:])')
 
 
