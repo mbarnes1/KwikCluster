@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from copy import deepcopy
 import cProfile
 from MinHash import MinHash
@@ -58,6 +59,7 @@ def kwik_cluster(minhash, bands_original, threshold, destructive=True):
         bands = deepcopy(bands_original)
     clusters = set()
     while bands.doc_to_bands:
+        print 'KwikCluster on remaining ' + str(len(bands.doc_to_bands)) + ' documents'
         (pivot_id, pivot_bands) = bands.doc_to_bands.popitem()
         bands.doc_to_bands[pivot_id] = pivot_bands
         pivot_bands = deepcopy(pivot_bands)

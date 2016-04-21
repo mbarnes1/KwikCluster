@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import numpy as np
 import random
 from hashlib import sha1
@@ -30,6 +31,7 @@ class MinHash(object):
         doc_id = doc_id_0 - headers
         with open(file_name) as ins:
             for line in ins:
+                print 'Adding document ' + str(doc_id) + ' to corpus'
                 if doc_id >= doc_id_0:
                     tokens = frozenset(line.rstrip('\n').split(delimiter))
                     self.signatures[doc_id] = self._hash_document(tokens)
@@ -105,7 +107,8 @@ class Banding(object):
         Add multiple signatures to the banding
         :param signatures: Dictionary of [doc id, signature]
         """
-        for doc_id, signature in signatures.iteritems():
+        for counter, (doc_id, signature) in enumerate(signatures.iteritems()):
+            print 'Banding document ' + str(counter)
             self._add_signature(doc_id, signature)
         print 'Added ' + str(len(signatures)) + ' documents to the banding. Total of ' + str(self.number_bands) + ' bands with ' + str(self.number_docs_in_bands) + ' stored doc ids (including repeated elements in different bands.'
 
