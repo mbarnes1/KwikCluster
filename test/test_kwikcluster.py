@@ -4,7 +4,6 @@ from KwikCluster import clean
 from KwikCluster import clusters_to_labels
 import MinHash
 from draw_synthetic import draw_synthetic
-from copy import deepcopy
 __author__ = 'mbarnes1'
 
 
@@ -14,7 +13,7 @@ class MyTestCase(unittest.TestCase):
         self.number_records = 100
         number_hash_functions = 200
         self.threshold = 0.05
-        dataset = 'synthetic.txt'
+        dataset = 'test/synthetic.txt'
         _, self.labels = draw_synthetic(self.number_records, number_clusters, output=dataset)
         self.minhash = MinHash.MinHash(number_hash_functions)
         self.minhash.hash_corpus(dataset)
