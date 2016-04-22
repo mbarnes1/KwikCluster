@@ -11,9 +11,10 @@ def main(argv):
     number_hash_functions = 200
     threshold = 0.9
     header_lines = 0
-    helpline = 'test.py -i <inputfile> -o <outputfile> -d <numberheaderlines> -t <threshold> -f <numberhashfunctions>'
+    number_threads = 1
+    helpline = 'test.py -i <inputfile> -o <outputfile> -d <numberheaderlines> -t <threshold> -f <numberhashfunctions> -m <numberthreads>'
     try:
-        opts, args = getopt.getopt(argv, "h:i:o:d:t:f:", ["ifile=", "ofile=", "headerlines=", "threshold=", "hashfunctions="])
+        opts, args = getopt.getopt(argv, "h:i:o:d:t:f:m:", ["ifile=", "ofile=", "headerlines=", "threshold=", "hashfunctions=", "threads="])
     except getopt.GetoptError:
         print helpline
         sys.exit(2)
@@ -31,8 +32,10 @@ def main(argv):
             threshold = float(arg)
         elif opt in ("-f", "--hashfunctions"):
             number_hash_functions = int(arg)
+        elif opt in ("-m", "--threads"):
+            number_threads = int(arg)
     minhash = MinHash(number_hash_functions)
-    minhash.hash_corpus(input_file, headers=header_lines)
+    minhash.hash_corpus(input_file, headers=header_lines, number_threads=number_threads)
     bands = Banding(number_hash_functions, threshold)
     bands.add_signatures(minhash.signatures)
     clusters = kwik_cluster(minhash, bands, threshold)
