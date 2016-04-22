@@ -59,8 +59,8 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual(len(minhash1.signatures), len(minhash2.signatures))
         for key, value in minhash1.signatures.iteritems():
             np.testing.assert_array_equal(value, minhash2.signatures[key])
-        print 'Single process time: ' + str(duration_single)
-        print str(number_threads) + '-process time: ' + str(duration_multi)
+        print 'Single process hashing time: ' + str(duration_single)
+        print str(number_threads) + '-process hashing time: ' + str(duration_multi)
 
     def test_jaccard(self):
         doc1 = frozenset(['s'+str(i) for i in range(1, 1000)])
@@ -81,10 +81,23 @@ class MyTestCase(unittest.TestCase):
         self.assertAlmostEqual(j, 10./30, delta=0.05)
 
     def test_add_signatures(self):
-        self.minhash.hash_corpus('test/cranewife.txt', headers=1, number_threads=3)
-        self.banding.add_signatures(self.minhash.signatures)
-        self.assertEqual(len(self.banding.doc_to_bands), 3)
-        self.assertEqual(0 in self.banding.band_to_docs[self.banding.doc_to_bands[0].pop()], True)
-        self.assertEqual(1 in self.banding.band_to_docs[self.banding.doc_to_bands[1].pop()], True)
+        number_tests = 1
+        number_threads = 5
+        number_records = 1000
+        _ = draw_synthetic(number_records, 100)
+        self.minhash.hash_corpus('test/synthetic.txt', headers=1, number_threads=5)
+        banding1 = deepcopy(self.banding)
+        banding2 = deepcopy(self.banding)
+        t = timeit.Timer(lambda: banding1.add_signatures(self.minhash.signatures))
+        duration_single = t.timeit(number=number_tests)
+        t = timeit.Timer(lambda: banding2.add_signatures(self.minhash.signatures, number_threads=number_threads))
+        duration_multi = t.timeit(number=number_tests)
+        self.assertEqual(len(banding1.doc_to_bands), len(self.minhash.signatures))
+        for key, value in banding1.band_to_docs.iteritems():
+            self.assertSetEqual(value, banding2.band_to_docs[key])
+        for key, value in banding1.doc_to_bands.iteritems():
+            self.assertSetEqual(value, banding2.doc_to_bands[key])
+        print 'Single process banding time: ' + str(duration_single)
+        print str(number_threads) + '-process banding time: ' + str(duration_multi)
 
     #def test_calculate_bandwidth(self):
