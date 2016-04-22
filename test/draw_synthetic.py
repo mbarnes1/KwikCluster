@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def draw_synthetic(number_records, number_clusters, output='synthetic.txt'):
+def draw_synthetic(number_records, number_clusters, output='test/synthetic.txt'):
     """
     Synthetic datset
     :param number_records:

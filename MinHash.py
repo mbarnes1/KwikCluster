@@ -3,6 +3,36 @@ import numpy as np
 import random
 from hashlib import sha1
 from scipy.spatial.distance import hamming
+import multiprocessing
+
+
+class Worker(multiprocessing.Process):
+    """
+    This is a multiprocessing worker, which when created starts another Python instance.
+    After initialization, work begins with .start()
+    When finished (determined when sentinel object - None - is queue is processed), clean up with .join()
+    """
+    def __init__(self, minhash, jobqueue, resultsqueue):
+        """
+        :param minhash: MinHash object
+        :param jobqueue: Multiprocessing.Queue() of records to hash
+        :param resultsqueue: Multiprocessing.Queue() of tuples.
+                             tuple[0] = Doc ID
+                             tuple[1] = Doc MinHash signature
+        """
+        super(Worker, self).__init__()
+        self.job_queue = jobqueue
+        self.results_queue = resultsqueue
+        self.minhash = minhash
+
+    def run(self):
+        print 'Worker started'
+        for job in iter(self.job_queue.get, None):
+            doc_id = job[0]
+            tokens = job[1]
+            signature = self.minhash.hash_document(tokens)
+            self.results_queue.put((doc_id, signature))
+        print 'Worker exiting'
 
 
 class MinHash(object):
@@ -20,24 +50,56 @@ class MinHash(object):
         self._number_hash_functions = number_hash_functions
         self.signatures = dict()
 
-    def hash_corpus(self, file_name, delimiter=' ', headers=0, doc_id_0=0):
+    def hash_corpus(self, file_name, delimiter=' ', headers=0, doc_id_0=0, number_threads=1):
         """
         Apply MinHash to a raw text file, and documents to dataset
         :param file_name: String, path to file name
         :param delimiter: String to split tokens by
         :param headers: Number of header lines in file
         :param doc_id_0: Document id to assign to first document in file
+        :param number_threads: Number of threads to hash documents with
         """
         doc_id = doc_id_0 - headers
-        with open(file_name) as ins:
-            for line in ins:
-                print 'Adding document ' + str(doc_id) + ' to corpus'
-                if doc_id >= doc_id_0:
-                    tokens = frozenset(line.rstrip('\n').split(delimiter))
-                    self.signatures[doc_id] = self._hash_document(tokens)
-                doc_id += 1
+        if number_threads > 1:
+            job_queue = multiprocessing.Queue()
+            results_queue = multiprocessing.Queue()
+            worker_pool = list()
+            for _ in range(number_threads):
+                w = Worker(self, job_queue, results_queue)
+                worker_pool.append(w)
+                w.start()
+            number_jobs = 0
+            with open(file_name) as ins:
+                for line in ins:
+                    if doc_id >= doc_id_0:
+                        print 'Reading document ' + str(doc_id) + '. Hashing in parallel.'
+                        tokens = frozenset(line.rstrip('\n').split(delimiter))
+                        job_queue.put((doc_id, tokens))
+                        number_jobs += 1
+                    doc_id += 1
+            for _ in worker_pool:
+                job_queue.put(None)  # Sentinel objects to allow clean shutdown: 1 per worker.
+            number_finished_jobs = 0
+            while number_finished_jobs < number_jobs:
+                result = results_queue.get()
+                doc_id = result[0]
+                signature = result[1]
+                self.signatures[doc_id] = signature
+                number_finished_jobs += 1
+                print 'Finished job ' + str(number_finished_jobs) + ' of ' + str(number_jobs)
+            print 'Joining workers'
+            for worker in worker_pool:
+                worker.join()
+        else:
+            with open(file_name) as ins:
+                for line in ins:
+                    print 'Adding document ' + str(doc_id) + ' to corpus'
+                    if doc_id >= doc_id_0:
+                        tokens = frozenset(line.rstrip('\n').split(delimiter))
+                        self.signatures[doc_id] = self.hash_document(tokens)
+                    doc_id += 1
 
-    def _hash_document(self, document):
+    def hash_document(self, document):
         """
         MinHash signature of a single document, does not add to dataset
         :param document: Set of tokens
