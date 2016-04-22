@@ -45,7 +45,7 @@ class MyTestCase(unittest.TestCase):
         self.minhash.hash_corpus('test/synthetic.txt', headers=1, max_lines=12)
         self.assertEqual(len(self.minhash.signatures), 12)
 
-    def test_multiprocessing(self):
+    def test_corpus_multiprocessing(self):
         number_threads = 10
         number_records = 10000
         number_tests = 1
@@ -80,15 +80,8 @@ class MyTestCase(unittest.TestCase):
         j = self.minhash.jaccard(0, 1)
         self.assertAlmostEqual(j, 10./30, delta=0.05)
 
-    def test_add_signature(self):
-        self.minhash.hash_corpus('test/cranewife.txt', headers=1)
-        self.banding._add_signature(7, self.minhash.signatures[0])
-        self.banding._add_signature(11, self.minhash.signatures[2])
-        self.assertEqual(len(self.banding.doc_to_bands), 2)
-        self.assertEqual(7 in self.banding.band_to_docs[self.banding.doc_to_bands[7].pop()], True)
-
     def test_add_signatures(self):
-        self.minhash.hash_corpus('test/cranewife.txt', headers=1)
+        self.minhash.hash_corpus('test/cranewife.txt', headers=1, number_threads=3)
         self.banding.add_signatures(self.minhash.signatures)
         self.assertEqual(len(self.banding.doc_to_bands), 3)
         self.assertEqual(0 in self.banding.band_to_docs[self.banding.doc_to_bands[0].pop()], True)

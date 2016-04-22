@@ -4,6 +4,8 @@ import random
 from hashlib import sha1
 from scipy.spatial.distance import hamming
 import multiprocessing
+from itertools import izip
+from functools import partial
 
 
 class Worker(multiprocessing.Process):
@@ -36,7 +38,7 @@ class Worker(multiprocessing.Process):
 
 
 class MinHash(object):
-    """
+    """å
     MinHash (Broder 1997)
     """
     def __init__(self, number_hash_functions):
@@ -169,34 +171,32 @@ class Banding(object):
         """
         return self._threshold
 
-    def add_signatures(self, signatures):
+    def add_signatures(self, signatures, number_threads=1):
         """
         Add multiple signatures to the banding
         :param signatures: Dictionary of [doc id, signature]
+        :param number_threads: For multiprocessing
         """
-        for counter, (doc_id, signature) in enumerate(signatures.iteritems()):
-            print 'Banding document ' + str(counter)
-            self._add_signature(doc_id, signature)
-        print 'Added ' + str(len(signatures)) + ' documents to the banding. Total of ' + str(self.number_bands) + ' bands with ' + str(self.number_docs_in_bands) + ' stored doc ids (including repeated elements in different bands.'
-
-    def _add_signature(self, doc_id, signature):
-        """
-        Add a single document to the banding
-        :param doc_id: Document ID
-        :param signature: numpy vector of a single document's minhash signature
-        """
-        if doc_id not in self.doc_to_bands:
-            bands = set()
-            for i, raw_band in enumerate(np.array_split(signature, self._number_bands_per_doc)):
-                band = sha1("ab" + str(raw_band) + "ba"+str(i)).digest()
-                bands.add(band)
+        jobs = []
+        job_ids = []
+        for doc_id, signature in signatures.iteritems():
+            jobs.append(signature)
+            job_ids.append(doc_id)
+        p = multiprocessing.Pool(number_threads)
+        chunk_size = int(float(len(jobs))/number_threads)
+        function = partial(compute_bands, self._number_bands_per_doc)
+        doc_to_bands = p.map(function, jobs, chunk_size)
+        for doc_id, bands in izip(job_ids, doc_to_bands):
+            if doc_id not in self.doc_to_bands:
+                self.doc_to_bands[doc_id] = bands
+            else:
+                KeyError('Attempted to add same document multiple times')
+            for band in bands:
                 if band in self.band_to_docs:
                     self.band_to_docs[band].add(doc_id)
                 else:
                     self.band_to_docs[band] = {doc_id}
-            self.doc_to_bands[doc_id] = bands
-        else:
-            raise KeyError('Attempted to add same document multiple times')
+        print 'Added ' + str(len(signatures)) + ' documents to the banding. Total of ' + str(self.number_bands) + ' bands with ' + str(self.number_docs_in_bands) + ' stored doc ids (including repeated elements in different bands.'
 
     def band_to_docs(self, band_key):
         """
@@ -234,3 +234,17 @@ class Banding(object):
                 best = r
                 minerr = err
         return best
+
+
+def compute_bands(number_bands_per_doc, signature):
+    """
+    Compute bands of a signature
+    :param signature: numpy vector of a single document's minhash signature
+    :param number_bands_per_doc:
+    :return bands: List of document bands
+    """
+    bands = set()
+    for i, raw_band in enumerate(np.array_split(signature, number_bands_per_doc)):
+        band = sha1("ab" + str(raw_band) + "ba" + str(i)).digest()
+        bands.add(band)
+    return bands
