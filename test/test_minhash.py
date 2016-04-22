@@ -41,6 +41,10 @@ class MyTestCase(unittest.TestCase):
         np.testing.assert_array_equal(self.minhash.signatures[2], self.minhash.hash_document(doc2))
         self.assertEqual(len(self.minhash.signatures), 3)
 
+    def test_max_lines(self):
+        self.minhash.hash_corpus('test/synthetic.txt', headers=1, max_lines=12)
+        self.assertEqual(len(self.minhash.signatures), 12)
+
     def test_multiprocessing(self):
         number_threads = 10
         number_records = 10000

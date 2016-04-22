@@ -5,6 +5,7 @@ from MinHash import MinHash
 from MinHash import Banding
 import sys
 import getopt
+from numpy import Inf
 
 
 def main(argv):
@@ -12,9 +13,10 @@ def main(argv):
     threshold = 0.9
     header_lines = 0
     number_threads = 1
-    helpline = 'test.py -i <inputfile> -o <outputfile> -d <numberheaderlines> -t <threshold> -f <numberhashfunctions> -m <numberthreads>'
+    max_lines = Inf
+    helpline = 'test.py -i <inputfile> -o <outputfile> -d <numberheaderlines> -t <threshold> -f <numberhashfunctions> -c <numberthreads> -m <maxlines>'
     try:
-        opts, args = getopt.getopt(argv, "h:i:o:d:t:f:m:", ["ifile=", "ofile=", "headerlines=", "threshold=", "hashfunctions=", "threads="])
+        opts, args = getopt.getopt(argv, "h:i:o:d:t:f:c:m:", ["ifile=", "ofile=", "headerlines=", "threshold=", "hashfunctions=", "threads=", "maxlines="])
     except getopt.GetoptError:
         print helpline
         sys.exit(2)
@@ -32,10 +34,12 @@ def main(argv):
             threshold = float(arg)
         elif opt in ("-f", "--hashfunctions"):
             number_hash_functions = int(arg)
-        elif opt in ("-m", "--threads"):
+        elif opt in ("-c", "--threads"):
             number_threads = int(arg)
+        elif opt in ("-m", "--maxlines"):
+            max_lines = int(arg)
     minhash = MinHash(number_hash_functions)
-    minhash.hash_corpus(input_file, headers=header_lines, number_threads=number_threads)
+    minhash.hash_corpus(input_file, headers=header_lines, number_threads=number_threads, max_lines=max_lines)
     bands = Banding(number_hash_functions, threshold)
     bands.add_signatures(minhash.signatures)
     clusters = kwik_cluster(minhash, bands, threshold)

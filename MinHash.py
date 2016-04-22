@@ -50,7 +50,7 @@ class MinHash(object):
         self._number_hash_functions = number_hash_functions
         self.signatures = dict()
 
-    def hash_corpus(self, file_name, delimiter=' ', headers=0, doc_id_0=0, number_threads=1):
+    def hash_corpus(self, file_name, delimiter=' ', headers=0, doc_id_0=0, number_threads=1, max_lines=np.Inf):
         """
         Apply MinHash to a raw text file, and documents to dataset
         :param file_name: String, path to file name
@@ -58,6 +58,7 @@ class MinHash(object):
         :param headers: Number of header lines in file
         :param doc_id_0: Document id to assign to first document in file
         :param number_threads: Number of threads to hash documents with
+        :param max_lines: Maximum number of lines to read in from file
         """
         doc_id = doc_id_0 - headers
         if number_threads > 1:
@@ -76,6 +77,8 @@ class MinHash(object):
                         tokens = frozenset(line.rstrip('\n').split(delimiter))
                         job_queue.put((doc_id, tokens))
                         number_jobs += 1
+                        if number_jobs >= max_lines:
+                            break
                     doc_id += 1
             for _ in worker_pool:
                 job_queue.put(None)  # Sentinel objects to allow clean shutdown: 1 per worker.
@@ -98,6 +101,8 @@ class MinHash(object):
                         tokens = frozenset(line.rstrip('\n').split(delimiter))
                         self.signatures[doc_id] = self.hash_document(tokens)
                     doc_id += 1
+                    if doc_id-doc_id_0 >= max_lines:
+                        break
 
     def hash_document(self, document):
         """
