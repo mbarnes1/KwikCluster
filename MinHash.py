@@ -65,7 +65,7 @@ class MinHash(object):
         """
         doc_id = doc_id_0 - headers
         if number_threads > 1:
-            job_queue = multiprocessing.Queue()
+            job_queue = multiprocessing.Queue(10000)
             results_queue = multiprocessing.Queue()
             worker_pool = list()
             for _ in range(number_threads):
@@ -76,7 +76,7 @@ class MinHash(object):
             with open(file_name) as ins:
                 for line in ins:
                     if doc_id >= doc_id_0:
-                        print 'Reading document ' + str(doc_id) + '. Hashing in parallel.'
+                        print 'Reading document ' + str(doc_id) + '. Simultaneously hashing in parallel.'
                         tokens = frozenset(line.rstrip('\n').split(delimiter))
                         job_queue.put((doc_id, tokens))
                         number_jobs += 1
@@ -92,7 +92,7 @@ class MinHash(object):
                 signature = result[1]
                 self.signatures[doc_id] = signature
                 number_finished_jobs += 1
-                print 'Finished job ' + str(number_finished_jobs) + ' of ' + str(number_jobs)
+                print 'Emptying Minhash results queue: ' + str(number_finished_jobs) + ' of ' + str(number_jobs)
             print 'Joining workers'
             for worker in worker_pool:
                 worker.join()
