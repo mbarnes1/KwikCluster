@@ -6,6 +6,8 @@ from scipy.spatial.distance import hamming
 import multiprocessing
 from itertools import izip
 from functools import partial
+import copy_reg
+import types
 __author__ = 'Benedikt Boecking and Matt Barnes'
 
 
@@ -53,9 +55,27 @@ class MinHash(object):
         self._number_hash_functions = number_hash_functions
         self.signatures = dict()
 
+    def hash_corpus_dictionary(self, documents, number_threads=1, delimiter=' '):
+        """
+        Apply MinHash to pre-loaded document, add documents to dataset
+        :param documents: Dictionary of [id, text]
+        :param number_threads: Number of threads to hash documents with
+        :param delimiter: String to split tokens by
+        """
+        jobs = []
+        job_ids = []
+        for doc_id, text in documents.iteritems():
+            tokens = frozenset(text.rstrip('\n').split(delimiter))
+            jobs.append(tokens)
+            job_ids.append(doc_id)
+        p = multiprocessing.Pool(number_threads)
+        chunk_size = int(float(len(jobs)) / number_threads)
+        signatures = p.map(self.hash_document, jobs, chunk_size)
+        self.signatures = {doc_id: signature for doc_id, signature in izip(job_ids, signatures)}
+
     def hash_corpus(self, file_name, delimiter=' ', headers=0, doc_id_0=0, number_threads=1, max_lines=np.Inf):
         """
-        Apply MinHash to a raw text file, and documents to dataset
+        Apply MinHash to a raw text file, add documents to dataset
         :param file_name: String, path to file name
         :param delimiter: String to split tokens by
         :param headers: Number of header lines in file
@@ -249,3 +269,29 @@ def compute_bands(number_bands_per_doc, signature):
         band = sha1("ab" + str(raw_band) + "ba" + str(i)).digest()
         bands.add(band)
     return bands
+
+
+def _pickle_method(method):
+    func_name = method.im_func.__name__
+    obj = method.im_self
+    cls = method.im_class
+    if func_name.startswith('__') and not func_name.endswith('__'):
+        #deal with mangled names
+        cls_name = cls.__name__.lstrip('_')
+        func_name = '_%s%s' % (cls_name, func_name)
+    return _unpickle_method, (func_name, obj, cls)
+
+
+def _unpickle_method(func_name, obj, cls):
+    if obj and func_name in obj.__dict__:
+        cls, obj = obj, None  # if func_name is classmethod
+    for cls in cls.__mro__:
+        try:
+            func = cls.__dict__[func_name]
+        except KeyError:
+            pass
+        else:
+            break
+    return func.__get__(obj, cls)
+
+copy_reg.pickle(types.MethodType, _pickle_method, _unpickle_method)

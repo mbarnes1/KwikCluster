@@ -41,17 +41,34 @@ class MyTestCase(unittest.TestCase):
         np.testing.assert_array_equal(self.minhash.signatures[2], self.minhash.hash_document(doc2))
         self.assertEqual(len(self.minhash.signatures), 3)
 
+    def test_hash_corpus_dictionary(self):
+        number_threads = 4
+        number_records = 100
+        minhash1 = deepcopy(self.minhash)
+        minhash2 = deepcopy(self.minhash)
+        _ = draw_synthetic(number_records, 10)
+        minhash1.hash_corpus('test/synthetic.txt', number_threads=1)
+        documents = dict()
+        with open('test/synthetic.txt') as ins:
+            for doc_id, line in enumerate(ins):
+                    documents[doc_id] = line
+        minhash2.hash_corpus_dictionary(documents, number_threads=number_threads)
+        self.assertEqual(len(minhash1.signatures), len(minhash2.signatures))
+        for key, value in minhash1.signatures.iteritems():
+            print 'Testing doc ' + str(key)
+            np.testing.assert_array_equal(value, minhash2.signatures[key])
+
     def test_max_lines(self):
         self.minhash.hash_corpus('test/synthetic.txt', headers=1, max_lines=12)
         self.assertEqual(len(self.minhash.signatures), 12)
 
     def test_corpus_multiprocessing(self):
         number_threads = 10
-        number_records = 10000
+        number_records = 1000
         number_tests = 1
         minhash1 = deepcopy(self.minhash)
         minhash2 = deepcopy(self.minhash)
-        _ = draw_synthetic(number_records, 1000)
+        _ = draw_synthetic(number_records, 50)
         t = timeit.Timer(lambda: minhash1.hash_corpus('test/synthetic.txt', number_threads=1))
         duration_single = t.timeit(number=number_tests)
         t = timeit.Timer(lambda: minhash2.hash_corpus('test/synthetic.txt', number_threads=number_threads))
@@ -82,9 +99,9 @@ class MyTestCase(unittest.TestCase):
 
     def test_add_signatures(self):
         number_tests = 1
-        number_threads = 5
-        number_records = 1000
-        _ = draw_synthetic(number_records, 100)
+        number_threads = 4
+        number_records = 100
+        _ = draw_synthetic(number_records, 20)
         self.minhash.hash_corpus('test/synthetic.txt', headers=1, number_threads=5)
         banding1 = deepcopy(self.banding)
         banding2 = deepcopy(self.banding)
