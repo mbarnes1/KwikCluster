@@ -6,6 +6,7 @@ from scipy.spatial.distance import hamming
 import multiprocessing
 from itertools import izip
 from functools import partial
+__author__ = 'Benedikt Boecking and Matt Barnes'
 
 
 class Worker(multiprocessing.Process):
@@ -38,7 +39,7 @@ class Worker(multiprocessing.Process):
 
 
 class MinHash(object):
-    """å
+    """
     MinHash (Broder 1997)
     """
     def __init__(self, number_hash_functions):
@@ -46,7 +47,7 @@ class MinHash(object):
         :param number_hash_functions: Int >= 1
         """
         self._mersenne_prime = (1 << 89) - 1  # (x << n) is x shifted left by n bit
-        self._max_hash = (1 << 62) - 1  # BARNES: Changed from 64 --> 62
+        self._max_hash = (1 << 64) - 1  # BARNES: Changed from 64 --> 62
         random.seed(427)
         self._a, self._b = np.array([(random.randint(1, self._mersenne_prime), random.randint(0, self._mersenne_prime)) for _ in xrange(number_hash_functions)]).T
         self._number_hash_functions = number_hash_functions
@@ -112,8 +113,8 @@ class MinHash(object):
         :param document: Set of tokens
         :return signature: numpy vector of MinHash signature
         """
-        signature = np.empty(self._number_hash_functions)
-        signature.fill(self._max_hash)
+        signature = np.ones(self._number_hash_functions, dtype=np.uint64)
+        signature = signature * self._max_hash
         for token in document:
             signature = np.minimum(self._hash_token(token), signature)
         return signature

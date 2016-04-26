@@ -6,6 +6,7 @@ from MinHash import Banding
 import sys
 import getopt
 from numpy import Inf
+__author__ = 'Matt Barnes'
 
 
 def main(argv):
