@@ -1,4 +1,5 @@
 # KwikCluster
+KwikCluster [Ailon2008] using MinHash [Broeder1997] as a match function.
 
 python2.7 KwikCluster.py -i \<inputfile\> -o \<outputfile\> -d \<numberheaderlines\> -t \<threshold\> -f \<numberhashfunctions\> -c \<numberthreads\> -m \<maxlines\>
 
