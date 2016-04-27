@@ -1,8 +1,8 @@
 import unittest
-from KwikCluster import kwik_cluster
-from KwikCluster import clean
-from KwikCluster import clusters_to_labels
-import MinHash
+from CorrelationClustering.KwikCluster import kwik_cluster_minhash, kwik_cluster_dict
+from CorrelationClustering.KwikCluster import clean
+from CorrelationClustering.KwikCluster import clusters_to_labels
+from CorrelationClustering import MinHash
 from draw_synthetic import draw_synthetic
 __author__ = 'mbarnes1'
 
@@ -34,15 +34,14 @@ class MyTestCase(unittest.TestCase):
     def test_clean(self):
         self.assertEqual(len(self.banding.doc_to_bands), self.number_records)
         self.assertIn(3, self.banding.doc_to_bands)
-        clean(self.banding, 3)
+        clean(self.banding.doc_to_bands, self.banding.band_to_docs, 3)
         self.assertEqual(len(self.banding.doc_to_bands), self.number_records-1)
         self.assertNotIn(3, self.banding.doc_to_bands)
         for band, doc_ids in self.banding.band_to_docs.iteritems():
             self.assertNotIn(3, doc_ids)
 
-    def test_kwikcluster(self):
-        print self.labels
-        predicted_clusters = kwik_cluster(self.minhash, self.banding, self.threshold)
+    def test_kwikcluster_minhash(self):
+        predicted_clusters = kwik_cluster_minhash(self.minhash, self.banding, self.threshold)
         true_clusters = dict()
         for doc_id, label in self.labels.iteritems():
             if label in true_clusters:
@@ -51,3 +50,16 @@ class MyTestCase(unittest.TestCase):
                 true_clusters[label] = {doc_id}
         true_clusters = frozenset([frozenset(docs) for _, docs in true_clusters.iteritems()])
         self.assertEqual(predicted_clusters, true_clusters)
+
+    def test_kwikcluster_dict(self):
+        doc_to_features = { '0': {'a', 'b', 'c'},
+            '1': {'a'},
+            '2': {'d', 'e'},
+            '3': {'e', 'f'},
+        }
+        predicted_clusters = kwik_cluster_dict(doc_to_features)
+        true_clusters = frozenset({
+            frozenset(['0', '1']),
+            frozenset(['2', '3'])
+        })
+        self.assertSetEqual(predicted_clusters, true_clusters)

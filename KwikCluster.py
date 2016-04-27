@@ -43,16 +43,49 @@ def main(argv):
     minhash.hash_corpus(input_file, headers=header_lines, number_threads=number_threads, max_lines=max_lines)
     bands = Banding(number_hash_functions, threshold)
     bands.add_signatures(minhash.signatures, number_threads=number_threads)
-    clusters = kwik_cluster(minhash, bands, threshold)
+    clusters = kwik_cluster_minhash(minhash, bands, threshold)
     with open(output_file, 'w') as ins:
         for cluster in clusters:
             line = ' '.join([str(doc_id) for doc_id in cluster])
             ins.write(line + '\n')
 
 
-def kwik_cluster(minhash, bands_original, threshold, destructive=True):
+def kwik_cluster_dict(doc_to_features, destructive=True):
     """
-    KwikCluster (Ailon et al. 2008)
+    KwikCluster (Ailon et al. 2008), with edges between any docs with at least one "feature"
+    :param doc_to_features: Dict of [doc id, iterable of features]
+    :param destructive: Whether to destructively operate on dicts
+    :return clusters: Frozen set of frozen sets, each subset contains doc ids in that cluster
+    """
+    if not destructive:
+        doc_to_features = deepcopy(doc_to_features)
+    feature_to_docs = dict()
+    for doc_id, features in doc_to_features.iteritems():
+        for feature in features:
+            if feature in feature_to_docs:
+                feature_to_docs[feature].add(doc_id)
+            else:
+                feature_to_docs[feature] = {doc_id}
+    clusters = set()
+    while doc_to_features:
+        print 'KwikCluster on remaining ' + str(len(doc_to_features)) + ' documents'
+        (pivot_id, pivot_features) = doc_to_features.popitem()
+        doc_to_features[pivot_id] = pivot_features
+        pivot_features = deepcopy(pivot_features)
+        clean(doc_to_features, feature_to_docs, pivot_id)
+        cluster = {pivot_id}
+        for feature in pivot_features:
+            for doc_id in deepcopy(feature_to_docs[feature]):
+                cluster.add(doc_id)
+                clean(doc_to_features, feature_to_docs, doc_id)
+        clusters.add(frozenset(cluster))
+    clusters = frozenset(clusters)
+    return clusters
+
+
+def kwik_cluster_minhash(minhash, bands_original, threshold, destructive=True):
+    """
+    KwikCluster (Ailon et al. 2008) using MinHash (Broder1997)
     :param minhash: MinHash object
     :param bands_original: Banding object
     :param threshold: Threshold to cluster at, >= bands.threshold
@@ -71,14 +104,14 @@ def kwik_cluster(minhash, bands_original, threshold, destructive=True):
         (pivot_id, pivot_bands) = bands.doc_to_bands.popitem()
         bands.doc_to_bands[pivot_id] = pivot_bands
         pivot_bands = deepcopy(pivot_bands)
-        clean(bands, pivot_id)
+        clean(bands.doc_to_bands, bands.band_to_docs, pivot_id)
         cluster = {pivot_id}
         for band in pivot_bands:
             for doc_id in deepcopy(bands.band_to_docs[band]):
                 J = minhash.jaccard(pivot_id, doc_id)
                 if J >= threshold:
                     cluster.add(doc_id)
-                    clean(bands, doc_id)
+                    clean(bands.doc_to_bands, bands.band_to_docs, doc_id)
         clusters.add(frozenset(cluster))
     clusters = frozenset(clusters)
     return clusters
@@ -96,15 +129,16 @@ def clusters_to_labels(clusters):
     return labels
 
 
-def clean(bands, doc_id):
+def clean(doc_to_features, feature_to_docs, doc_id):
     """
     Removes ID from all traces of bands
-    :param bands: Banding object
+    :param doc_to_features: Dict mapping [doc, set of features]
+    :param feature_to_docs: Dict mapping [feature, set of doc_ids]
     :param doc_id: Doc ID
     """
-    id_bands = bands.doc_to_bands.pop(doc_id)
-    for band in id_bands:
-        bands.band_to_docs[band].remove(doc_id)
+    features = doc_to_features.pop(doc_id)
+    for feature in features:
+        feature_to_docs[feature].remove(doc_id)
 
 
 if __name__ == '__main__':
