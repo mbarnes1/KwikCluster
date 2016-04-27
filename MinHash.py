@@ -55,16 +55,16 @@ class MinHash(object):
         self._number_hash_functions = number_hash_functions
         self.signatures = dict()
 
-    def hash_corpus_dictionary(self, documents, number_threads=1, delimiter=' '):
+    def hash_corpus_list(self, documents, number_threads=1, delimiter=' '):
         """
         Apply MinHash to pre-loaded document, add documents to dataset
-        :param documents: Dictionary of [id, text]
+        :param documents: List of record texts
         :param number_threads: Number of threads to hash documents with
         :param delimiter: String to split tokens by
         """
         jobs = []
         job_ids = []
-        for doc_id, text in documents.iteritems():
+        for doc_id, text in enumerate(documents):
             tokens = frozenset(text.rstrip('\n').split(delimiter))
             jobs.append(tokens)
             job_ids.append(doc_id)

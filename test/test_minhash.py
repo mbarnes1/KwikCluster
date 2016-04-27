@@ -1,7 +1,6 @@
 import unittest
-from MinHash import MinHash
+from CorrelationClustering.MinHash import MinHash, Banding
 import numpy as np
-from MinHash import Banding
 from copy import deepcopy
 import timeit
 from draw_synthetic import draw_synthetic
@@ -41,18 +40,16 @@ class MyTestCase(unittest.TestCase):
         np.testing.assert_array_equal(self.minhash.signatures[2], self.minhash.hash_document(doc2))
         self.assertEqual(len(self.minhash.signatures), 3)
 
-    def test_hash_corpus_dictionary(self):
+    def test_hash_corpus_list(self):
         number_threads = 4
         number_records = 100
         minhash1 = deepcopy(self.minhash)
         minhash2 = deepcopy(self.minhash)
         _ = draw_synthetic(number_records, 10)
         minhash1.hash_corpus('test/synthetic.txt', number_threads=1)
-        documents = dict()
         with open('test/synthetic.txt') as ins:
-            for doc_id, line in enumerate(ins):
-                    documents[doc_id] = line
-        minhash2.hash_corpus_dictionary(documents, number_threads=number_threads)
+            documents = [line for line in ins]
+        minhash2.hash_corpus_list(documents, number_threads=number_threads)
         self.assertEqual(len(minhash1.signatures), len(minhash2.signatures))
         for key, value in minhash1.signatures.iteritems():
             print 'Testing doc ' + str(key)
