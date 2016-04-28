@@ -55,10 +55,11 @@ class MinHash(object):
         self._number_hash_functions = number_hash_functions
         self.signatures = dict()
 
-    def hash_corpus_list(self, documents, number_threads=1, delimiter=' '):
+    def hash_corpus_list(self, documents, doc_id_0=0, number_threads=1, delimiter=' '):
         """
         Apply MinHash to pre-loaded document, add documents to dataset
         :param documents: List of record texts
+        :param doc_id_0: Document id to assign to first document in file
         :param number_threads: Number of threads to hash documents with
         :param delimiter: String to split tokens by
         """
@@ -67,7 +68,7 @@ class MinHash(object):
         for doc_id, text in enumerate(documents):
             tokens = frozenset(text.rstrip('\n').split(delimiter))
             jobs.append(tokens)
-            job_ids.append(doc_id)
+            job_ids.append(doc_id + doc_id_0)
         p = multiprocessing.Pool(number_threads)
         chunk_size = int(float(len(jobs)) / number_threads)
         signatures = p.map(self.hash_document, jobs, chunk_size)
