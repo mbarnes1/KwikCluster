@@ -6,6 +6,8 @@ from MinHash import Banding
 import sys
 import getopt
 from numpy import Inf
+from numpy import random
+from itertools import izip
 __author__ = 'Matt Barnes'
 
 
@@ -53,7 +55,7 @@ def main(argv):
 def kwik_cluster_dict(doc_to_features, destructive=True):
     """
     KwikCluster (Ailon et al. 2008), with edges between any docs with at least one "feature"
-    :param doc_to_features: Dict of [doc id, iterable of features]
+    :param doc_to_features: Dict of [doc id, set of features]
     :param destructive: Whether to destructively operate on dicts
     :return clusters: Frozen set of frozen sets, each subset contains doc ids in that cluster
     """
@@ -79,6 +81,40 @@ def kwik_cluster_dict(doc_to_features, destructive=True):
                 cluster.add(doc_id)
                 clean(doc_to_features, feature_to_docs, doc_id)
         clusters.add(frozenset(cluster))
+    clusters = frozenset(clusters)
+    return clusters
+
+
+def consensus_clustering(list_doc_to_links):
+    """
+    Consensus Clustering with KwikCluster (Ailon et al. 2008). An 11/7 approximation algorithm, in linear time
+    :param list_doc_to_links: List of all the clusterings to combine. Each clustering is a dictionary mapping every doc_id to a set of connected doc_ids
+    :return clusters: Frozen set of frozen sets, each subset contains doc ids in that cluster
+    """
+    clustering1 = list_doc_to_links[0]
+    n_clusterings = len(list_doc_to_links)
+    clusters = []
+    removed = set()
+    while clustering1:
+        [pivot, pivot_links] = clustering1.popitem()
+        if pivot not in removed:
+            removed.add(pivot)
+            cluster = set(pivot)
+            links = dict()
+            for pivot_connection in pivot_links.difference(removed):
+                links[pivot_connection] = 1
+            for clustering in list_doc_to_links[1:]:
+                for link in clustering[pivot].difference(removed):
+                    if link in links:
+                        links[link] += 1
+                    else:
+                        links[link] = 1
+            probs = random.uniform(size=len(links))
+            for prob, (link, nlinks) in izip(probs, links.iteritems()):
+                if float(nlinks)/n_clusterings > prob:
+                    cluster.add(link)
+            removed.update(cluster)
+            clusters.append(frozenset(cluster))
     clusters = frozenset(clusters)
     return clusters
 
