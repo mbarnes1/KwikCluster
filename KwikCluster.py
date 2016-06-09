@@ -97,9 +97,10 @@ def consensus_clustering(list_doc_to_links):
     removed = set()
     while clustering1:
         [pivot, pivot_links] = clustering1.popitem()
+        print(len(removed))
         if pivot not in removed:
             removed.add(pivot)
-            cluster = set(pivot)
+            cluster = set([pivot])
             links = dict()
             for pivot_connection in pivot_links.difference(removed):
                 links[pivot_connection] = 1
