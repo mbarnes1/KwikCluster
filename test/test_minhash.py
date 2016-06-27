@@ -65,7 +65,7 @@ class MyTestCase(unittest.TestCase):
         number_tests = 1
         minhash1 = deepcopy(self.minhash)
         minhash2 = deepcopy(self.minhash)
-        _ = draw_synthetic(number_records, 50)
+        _ = draw_synthetic(number_records, 50, output='test/synthetic.txt')
         t = timeit.Timer(lambda: minhash1.hash_corpus('test/synthetic.txt', number_threads=1))
         duration_single = t.timeit(number=number_tests)
         t = timeit.Timer(lambda: minhash2.hash_corpus('test/synthetic.txt', number_threads=number_threads))
