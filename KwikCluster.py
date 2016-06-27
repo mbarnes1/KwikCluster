@@ -70,7 +70,8 @@ def kwik_cluster_dict(doc_to_features, destructive=True):
                 feature_to_docs[feature] = {doc_id}
     clusters = set()
     while doc_to_features:
-        print 'KwikCluster on remaining ' + str(len(doc_to_features)) + ' documents'
+        if len(clusters) % 100 == 0:
+            print 'KwikCluster on remaining ' + str(len(doc_to_features)) + ' documents'
         (pivot_id, pivot_features) = doc_to_features.popitem()
         doc_to_features[pivot_id] = pivot_features
         pivot_features = deepcopy(pivot_features)
@@ -137,7 +138,8 @@ def kwik_cluster_minhash(minhash, bands_original, threshold, destructive=True):
         bands = deepcopy(bands_original)
     clusters = set()
     while bands.doc_to_bands:
-        print 'KwikCluster on remaining ' + str(len(bands.doc_to_bands)) + ' documents'
+        if len(clusters) % 100 == 0:
+            print 'KwikCluster on remaining ' + str(len(bands.doc_to_bands)) + ' documents'
         (pivot_id, pivot_bands) = bands.doc_to_bands.popitem()
         bands.doc_to_bands[pivot_id] = pivot_bands
         pivot_bands = deepcopy(pivot_bands)

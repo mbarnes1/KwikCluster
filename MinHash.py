@@ -8,6 +8,7 @@ from itertools import izip
 from functools import partial
 import copy_reg
 import types
+from Queue import Empty
 __author__ = 'Benedikt Boecking and Matt Barnes'
 
 
@@ -87,40 +88,50 @@ class MinHash(object):
         doc_id = doc_id_0 - headers
         if number_threads > 1:
             job_queue = multiprocessing.Queue(10000)
-            results_queue = multiprocessing.Queue()
+            results_queue = multiprocessing.Queue(20000)
             worker_pool = list()
             for _ in range(number_threads):
                 w = Worker(self, job_queue, results_queue)
                 worker_pool.append(w)
                 w.start()
             number_jobs = 0
+            number_finished_jobs = 0
             with open(file_name) as ins:
                 for line in ins:
                     if doc_id >= doc_id_0:
-                        print 'Reading document ' + str(doc_id) + '. Simultaneously hashing in parallel.'
+                        if doc_id % 100 == 0:
+                            print 'Reading document ' + str(doc_id) + '. Simultaneously hashing in parallel.'
                         tokens = frozenset(line.rstrip('\n').split(delimiter))
                         job_queue.put((doc_id, tokens))
                         number_jobs += 1
                         if number_jobs >= max_lines:
                             break
+
+                        if number_jobs > number_finished_jobs + 5000:
+                            result = results_queue.get()
+                            self.signatures[result[0]] = result[1]
+                            number_finished_jobs += 1
+                            if number_finished_jobs % 100 == 0:
+                                print 'Emptying Minhash results queue: ' + str(number_finished_jobs) + ' emptied results'
                     doc_id += 1
             for _ in worker_pool:
                 job_queue.put(None)  # Sentinel objects to allow clean shutdown: 1 per worker.
-            number_finished_jobs = 0
             while number_finished_jobs < number_jobs:
                 result = results_queue.get()
                 doc_id = result[0]
                 signature = result[1]
                 self.signatures[doc_id] = signature
                 number_finished_jobs += 1
-                print 'Emptying Minhash results queue: ' + str(number_finished_jobs) + ' of ' + str(number_jobs)
+                if number_finished_jobs % 100 == 0:
+                    print 'Emptying Minhash results queue: ' + str(number_finished_jobs) + ' of ' + str(number_jobs)
             print 'Joining workers'
             for worker in worker_pool:
                 worker.join()
         else:
             with open(file_name) as ins:
                 for line in ins:
-                    print 'Adding document ' + str(doc_id) + ' to corpus'
+                    if doc_id % 100 == 0:
+                        print 'Adding document ' + str(doc_id) + ' to corpus'
                     if doc_id >= doc_id_0:
                         tokens = frozenset(line.rstrip('\n').split(delimiter))
                         self.signatures[doc_id] = self.hash_document(tokens)
