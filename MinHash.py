@@ -145,7 +145,8 @@ class MinHash(object):
         :param document: Set of tokens
         :return signature: numpy vector of MinHash signature
         """
-        signature = np.full(self._number_hash_functions, self._max_hash, dtype=np.uint64)
+        signature = np.empty(self._number_hash_functions, dtype=np.uint64)
+        signature.fill(self._max_hash)
         for token in document:
             signature = np.minimum(self._hash_token(token), signature)
         return signature
