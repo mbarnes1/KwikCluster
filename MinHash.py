@@ -216,10 +216,10 @@ class Banding(object):
             jobs.append(signature)
             job_ids.append(doc_id)
         p = multiprocessing.Pool(number_threads)
-        chunk_size = int(float(len(jobs))/number_threads)
+        chunk_size = min(int(float(len(jobs))/number_threads), 10000)
         function = partial(compute_bands, self._number_bands_per_doc)
-        doc_to_bands = p.map(function, jobs, chunk_size)
-        for doc_id, bands in izip(job_ids, doc_to_bands):
+        print 'Computing bands...'
+        for doc_id, bands in izip(job_ids, p.imap(function, jobs, chunk_size)):
             if doc_id not in self.doc_to_bands:
                 self.doc_to_bands[doc_id] = bands
             else:
@@ -229,6 +229,8 @@ class Banding(object):
                     self.band_to_docs[band].add(doc_id)
                 else:
                     self.band_to_docs[band] = {doc_id}
+            if doc_id % 1000 == 0:
+                print 'Finished banding for doc ', str(doc_id)
         print 'Added ' + str(len(signatures)) + ' documents to the banding. Total of ' + str(self.number_bands) + ' bands with ' + str(self.number_docs_in_bands) + ' stored doc ids (including repeated elements in different bands.'
 
     def band_to_docs(self, band_key):
