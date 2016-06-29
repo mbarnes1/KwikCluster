@@ -214,7 +214,7 @@ class Banding(object):
         chunk_size = min(int(float(len(signatures))/self.pool._processes), 1000)
         function = partial(compute_bands, self._number_bands_per_doc)
         print 'Computing bands...'
-        for doc_id, bands in self.pool.imap(function, signatures.iteritems(), chunk_size):
+        for doc_id, bands in self.pool.imap_unordered(function, signatures.iteritems(), chunk_size):
             if doc_id not in self.doc_to_bands:
                 self.doc_to_bands[doc_id] = bands
             else:
