@@ -99,7 +99,7 @@ class MinHash(object):
             with open(file_name) as ins:
                 for line in ins:
                     if doc_id >= doc_id_0:
-                        if doc_id % 100 == 0:
+                        if doc_id % 1000 == 0:
                             print 'Reading document ' + str(doc_id) + '. Simultaneously hashing in parallel.'
                         tokens = frozenset(line.rstrip('\n').split(delimiter))
                         job_queue.put((doc_id, tokens))
@@ -111,7 +111,7 @@ class MinHash(object):
                             result = results_queue.get()
                             self.signatures[result[0]] = result[1]
                             number_finished_jobs += 1
-                            if number_finished_jobs % 100 == 0:
+                            if number_finished_jobs % 1000 == 0:
                                 print 'Emptying Minhash results queue: ' + str(number_finished_jobs) + ' emptied results'
                     doc_id += 1
             for _ in worker_pool:
@@ -122,7 +122,7 @@ class MinHash(object):
                 signature = result[1]
                 self.signatures[doc_id] = signature
                 number_finished_jobs += 1
-                if number_finished_jobs % 100 == 0:
+                if number_finished_jobs % 1000 == 0:
                     print 'Emptying Minhash results queue: ' + str(number_finished_jobs) + ' of ' + str(number_jobs)
             print 'Joining workers'
             for worker in worker_pool:
@@ -130,7 +130,7 @@ class MinHash(object):
         else:
             with open(file_name) as ins:
                 for line in ins:
-                    if doc_id % 100 == 0:
+                    if doc_id % 1000 == 0:
                         print 'Adding document ' + str(doc_id) + ' to corpus'
                     if doc_id >= doc_id_0:
                         tokens = frozenset(line.rstrip('\n').split(delimiter))

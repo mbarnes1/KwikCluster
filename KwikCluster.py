@@ -46,6 +46,7 @@ def main(argv):
     minhash.hash_corpus(input_file, headers=header_lines, number_threads=number_threads, max_lines=max_lines)
     bands.add_signatures(minhash.signatures)
     clusters = kwik_cluster_minhash(minhash, bands, threshold)
+    print 'Finished clustering. Found ', str(len(clusters)), ' clusters'
     with open(output_file, 'w') as ins:
         for cluster in clusters:
             line = ' '.join([str(doc_id) for doc_id in cluster])
