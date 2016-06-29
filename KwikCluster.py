@@ -43,8 +43,8 @@ def main(argv):
             max_lines = int(arg)
     minhash = MinHash(number_hash_functions)
     minhash.hash_corpus(input_file, headers=header_lines, number_threads=number_threads, max_lines=max_lines)
-    bands = Banding(number_hash_functions, threshold)
-    bands.add_signatures(minhash.signatures, number_threads=number_threads)
+    bands = Banding(number_hash_functions, threshold, number_threads=number_threads)
+    bands.add_signatures(minhash.signatures)
     clusters = kwik_cluster_minhash(minhash, bands, threshold)
     with open(output_file, 'w') as ins:
         for cluster in clusters:

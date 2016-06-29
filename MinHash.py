@@ -177,11 +177,13 @@ class Banding(object):
     """
     Banding the MinHash signatures for quickly finding neighbors
     """
-    def __init__(self, number_hash_functions, threshold):
+    def __init__(self, number_hash_functions, threshold, number_threads=1):
         """
         :param number_hash_functions: Integer, number of hash functions
         :param threshold: Jaccard threshold in [0, 1]
+        :param number_threads: For multiprocessing
         """
+        self.pool = multiprocessing.Pool(number_threads)
         self._threshold = threshold
         bandwidth = self._calculate_bandwidth(number_hash_functions, self._threshold)
         self._number_bands_per_doc = number_hash_functions / bandwidth
@@ -204,22 +206,15 @@ class Banding(object):
         """
         return self._threshold
 
-    def add_signatures(self, signatures, number_threads=1):
+    def add_signatures(self, signatures):
         """
         Add multiple signatures to the banding
         :param signatures: Dictionary of [doc id, signature]
-        :param number_threads: For multiprocessing
         """
-        jobs = []
-        job_ids = []
-        for doc_id, signature in signatures.iteritems():
-            jobs.append(signature)
-            job_ids.append(doc_id)
-        p = multiprocessing.Pool(number_threads)
-        chunk_size = min(int(float(len(jobs))/number_threads), 10000)
+        chunk_size = min(int(float(len(signatures))/self.pool._processes), 1000)
         function = partial(compute_bands, self._number_bands_per_doc)
         print 'Computing bands...'
-        for doc_id, bands in izip(job_ids, p.imap(function, jobs, chunk_size)):
+        for doc_id, bands in self.pool.imap(function, signatures.iteritems(), chunk_size):
             if doc_id not in self.doc_to_bands:
                 self.doc_to_bands[doc_id] = bands
             else:
@@ -271,18 +266,20 @@ class Banding(object):
         return best
 
 
-def compute_bands(number_bands_per_doc, signature):
+def compute_bands(number_bands_per_doc, docid_signature):
     """
     Compute bands of a signature
     :param signature: numpy vector of a single document's minhash signature
     :param number_bands_per_doc:
     :return bands: List of document bands
     """
+    docid = docid_signature[0]
+    signature = docid_signature[1]
     bands = set()
     for i, raw_band in enumerate(np.array_split(signature, number_bands_per_doc)):
         band = sha1("ab" + str(raw_band) + "ba" + str(i)).digest()
         bands.add(band)
-    return bands
+    return docid, bands
 
 
 def _pickle_method(method):
