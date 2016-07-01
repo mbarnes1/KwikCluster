@@ -10,9 +10,9 @@ __author__ = 'mbarnes1'
 class MyTestCase(unittest.TestCase):
     def setUp(self):
         self.number_hash_functions = 200
-        threshold = 0.8
+        self.threshold = 0.8
         self.minhash = MinHash(self.number_hash_functions)
-        self.banding = Banding(self.number_hash_functions, threshold)
+        self.banding = Banding(self.number_hash_functions, self.threshold, number_threads=2)
 
     def test_hash_token(self):
         h1 = self.minhash._hash_token('hello')
@@ -100,11 +100,11 @@ class MyTestCase(unittest.TestCase):
         number_records = 100
         _ = draw_synthetic(number_records, 20)
         self.minhash.hash_corpus('test/synthetic.txt', headers=1, number_threads=5)
-        banding1 = deepcopy(self.banding)
-        banding2 = deepcopy(self.banding)
+        banding1 = Banding(self.number_hash_functions, self.threshold, number_threads=1)
+        banding2 = Banding(self.number_hash_functions, self.threshold, number_threads=number_threads)
         t = timeit.Timer(lambda: banding1.add_signatures(self.minhash.signatures))
         duration_single = t.timeit(number=number_tests)
-        t = timeit.Timer(lambda: banding2.add_signatures(self.minhash.signatures, number_threads=number_threads))
+        t = timeit.Timer(lambda: banding2.add_signatures(self.minhash.signatures))
         duration_multi = t.timeit(number=number_tests)
         self.assertEqual(len(banding1.doc_to_bands), len(self.minhash.signatures))
         for key, value in banding1.band_to_docs.iteritems():

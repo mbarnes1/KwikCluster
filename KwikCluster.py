@@ -17,9 +17,11 @@ def main(argv):
     header_lines = 0
     number_threads = 1
     max_lines = Inf
-    helpline = 'test.py -i <inputfile> -o <outputfile> -d <numberheaderlines> -t <threshold> -f <numberhashfunctions> -c <numberthreads> -m <maxlines>'
+    input_gzip = False
+    input_json = False
+    helpline = 'test.py -i <inputfile> -o <outputfile> -d <numberheaderlines> -t <threshold> -f <numberhashfunctions> -c <numberthreads> -m <maxlines> -g <gzip> -j <json>'
     try:
-        opts, args = getopt.getopt(argv, "h:i:o:d:t:f:c:m:", ["ifile=", "ofile=", "headerlines=", "threshold=", "hashfunctions=", "threads=", "maxlines="])
+        opts, args = getopt.getopt(argv, "h:i:o:d:t:f:c:m:g:j:", ["ifile=", "ofile=", "headerlines=", "threshold=", "hashfunctions=", "threads=", "maxlines=", "gzip=", "json="])
     except getopt.GetoptError:
         print helpline
         sys.exit(2)
@@ -41,15 +43,21 @@ def main(argv):
             number_threads = int(arg)
         elif opt in ("-m", "--maxlines"):
             max_lines = int(arg)
+        elif opt in ("-g", "--gzip"):
+            input_gzip = arg == 'True'
+        elif opt in ("-j", "--json"):
+            input_json = arg == 'True'
+    print input_json
+    print input_gzip
     minhash = MinHash(number_hash_functions)
     bands = Banding(number_hash_functions, threshold, number_threads=number_threads)
-    minhash.hash_corpus(input_file, headers=header_lines, number_threads=number_threads, max_lines=max_lines)
+    minhash.hash_corpus(input_file, headers=header_lines, number_threads=number_threads, max_lines=max_lines, input_json=input_json, input_gzip=input_gzip)
     bands.add_signatures(minhash.signatures)
     clusters = kwik_cluster_minhash(minhash, bands, threshold)
     print 'Finished clustering. Found ', str(len(clusters)), ' clusters'
     with open(output_file, 'w') as ins:
         for cluster in clusters:
-            line = ' '.join([str(doc_id) for doc_id in cluster])
+            line = ' '.join([str(doc_index) for doc_index in cluster])
             ins.write(line + '\n')
 
 
@@ -129,7 +137,7 @@ def kwik_cluster_minhash(minhash, bands_original, threshold, destructive=True):
     :param bands_original: Banding object
     :param threshold: Threshold to cluster at, >= bands.threshold
     :param destructive: Whether to destructively operate on bands (faster)
-    :return clusters: Frozen set of frozen sets, each subset contains doc ids in that cluster
+    :return clusters: Frozen set of frozen sets, each subset contains doc indexes in that cluster
     """
     if threshold < bands_original.get_threshold():
         raise ValueError('Clustering threshold must be greater than or equal to threshold band threshold to find all matches with high probability')
@@ -150,7 +158,7 @@ def kwik_cluster_minhash(minhash, bands_original, threshold, destructive=True):
             for doc_id in deepcopy(bands.band_to_docs[band]):
                 J = minhash.jaccard(pivot_id, doc_id)
                 if J >= threshold:
-                    cluster.add(doc_id)
+                    cluster.add(minhash.line_to_index[doc_id])
                     clean(bands.doc_to_bands, bands.band_to_docs, doc_id)
         clusters.add(frozenset(cluster))
     clusters = frozenset(clusters)

@@ -9,6 +9,8 @@ from functools import partial
 import copy_reg
 import types
 from sys import maxint
+import gzip
+import json
 __author__ = 'Benedikt Boecking and Matt Barnes'
 
 
@@ -55,6 +57,7 @@ class MinHash(object):
         self._a, self._b = np.array([(random.randint(1, self._mersenne_prime), random.randint(0, self._mersenne_prime)) for _ in xrange(number_hash_functions)]).T
         self._number_hash_functions = number_hash_functions
         self.signatures = dict()
+        self.line_to_index = dict()
 
     def hash_corpus_list(self, documents, doc_id_0=0, number_threads=1, delimiter=' '):
         """
@@ -75,7 +78,7 @@ class MinHash(object):
         signatures = p.map(self.hash_document, jobs, chunk_size)
         self.signatures = {doc_id: signature for doc_id, signature in izip(job_ids, signatures)}
 
-    def hash_corpus(self, file_name, delimiter=' ', headers=0, doc_id_0=0, number_threads=1, max_lines=np.Inf):
+    def hash_corpus(self, file_name, delimiter=' ', headers=0, doc_id_0=0, number_threads=1, max_lines=np.Inf, input_gzip=False, input_json=False):
         """
         Apply MinHash to a raw text file, add documents to dataset
         :param file_name: String, path to file name
@@ -84,8 +87,14 @@ class MinHash(object):
         :param doc_id_0: Document id to assign to first document in file
         :param number_threads: Number of threads to hash documents with
         :param max_lines: Maximum number of lines to read in from file
+        :param input_gzip: Boolean, whether input is a gzip file
+        :param input_json: Boolean, whether input is a json file
         """
-        doc_id = doc_id_0 - headers
+        doc_line = doc_id_0 - headers
+        if input_gzip:
+            ins = gzip.GzipFile(file_name, 'rb')
+        else:
+            ins = open(file_name, 'rb')
         if number_threads > 1:
             job_queue = multiprocessing.Queue(10000)
             results_queue = multiprocessing.Queue(20000)
@@ -96,31 +105,37 @@ class MinHash(object):
                 w.start()
             number_jobs = 0
             number_finished_jobs = 0
-            with open(file_name) as ins:
-                for line in ins:
-                    if doc_id >= doc_id_0:
-                        if doc_id % 1000 == 0:
-                            print 'Reading document ' + str(doc_id) + '. Simultaneously hashing in parallel.'
+            for line in ins:
+                if doc_line >= doc_id_0:
+                    if doc_line % 1000 == 0:
+                        print 'Reading document ' + str(doc_line) + '. Simultaneously hashing in parallel.'
+                    if input_json:
+                        json_object = json.loads(line)
+                        print json_object
+                        tokens = json_object["_source"]['extracted_text']
+                        doc_index = json_object["_id"]
+                    else:
                         tokens = frozenset(line.rstrip('\n').split(delimiter))
-                        job_queue.put((doc_id, tokens))
-                        number_jobs += 1
-                        if number_jobs >= max_lines:
-                            break
-
-                        if number_jobs > number_finished_jobs + 5000:
-                            result = results_queue.get()
-                            self.signatures[result[0]] = result[1]
-                            number_finished_jobs += 1
-                            if number_finished_jobs % 1000 == 0:
-                                print 'Emptying Minhash results queue: ' + str(number_finished_jobs) + ' emptied results'
-                    doc_id += 1
+                        doc_index = doc_line
+                    self.line_to_index[doc_line] = doc_index
+                    job_queue.put((doc_line, tokens))
+                    number_jobs += 1
+                    if number_jobs >= max_lines:
+                        break
+                    if number_jobs > number_finished_jobs + 5000:
+                        result = results_queue.get()
+                        self.signatures[result[0]] = result[1]
+                        number_finished_jobs += 1
+                        if number_finished_jobs % 1000 == 0:
+                            print 'Emptying Minhash results queue: ' + str(number_finished_jobs) + ' emptied results'
+                doc_line += 1
             for _ in worker_pool:
                 job_queue.put(None)  # Sentinel objects to allow clean shutdown: 1 per worker.
             while number_finished_jobs < number_jobs:
                 result = results_queue.get()
-                doc_id = result[0]
+                doc_line = result[0]
                 signature = result[1]
-                self.signatures[doc_id] = signature
+                self.signatures[doc_line] = signature
                 number_finished_jobs += 1
                 if number_finished_jobs % 1000 == 0:
                     print 'Emptying Minhash results queue: ' + str(number_finished_jobs) + ' of ' + str(number_jobs)
@@ -128,16 +143,23 @@ class MinHash(object):
             for worker in worker_pool:
                 worker.join()
         else:
-            with open(file_name) as ins:
-                for line in ins:
-                    if doc_id % 1000 == 0:
-                        print 'Adding document ' + str(doc_id) + ' to corpus'
-                    if doc_id >= doc_id_0:
+            for line in ins:
+                if doc_line % 1000 == 0:
+                    print 'Adding document ' + str(doc_line) + ' to corpus'
+                if doc_line >= doc_id_0:
+                    if input_json:
+                        json_object = json.loads(line)
+                        print json_object
+                        tokens = json_object["_source"]['extracted_text']
+                        doc_index = json_object["_id"]
+                    else:
                         tokens = frozenset(line.rstrip('\n').split(delimiter))
-                        self.signatures[doc_id] = self.hash_document(tokens)
-                    doc_id += 1
-                    if doc_id-doc_id_0 >= max_lines:
-                        break
+                        doc_index = doc_line
+                    self.signatures[doc_index] = self.hash_document(tokens)
+                self.line_to_index[doc_line] = doc_line
+                doc_line += 1
+                if doc_line-doc_id_0 >= max_lines:
+                    break
 
     def hash_document(self, document):
         """
