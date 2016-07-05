@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import numpy as np
 import random
 from hashlib import sha1
@@ -148,14 +147,13 @@ class MinHash(object):
                 if doc_line >= doc_id_0:
                     if input_json:
                         json_object = json.loads(line)
-                        print json_object
                         tokens = json_object["_source"]['extracted_text']
                         doc_index = json_object["_id"]
                     else:
                         tokens = frozenset(line.rstrip('\n').split(delimiter))
                         doc_index = doc_line
-                    self.signatures[doc_index] = self.hash_document(tokens)
-                self.line_to_index[doc_line] = doc_line
+                    self.signatures[doc_line] = self.hash_document(tokens)
+                self.line_to_index[doc_line] = doc_index
                 doc_line += 1
                 if doc_line-doc_id_0 >= max_lines:
                     break
@@ -178,6 +176,7 @@ class MinHash(object):
         :param token: String
         :return values:
         """
+        print type(token)
         hv = int(sha1(token.encode('utf-8')).hexdigest(), 16) % (10 ** 12)
         # Do Carter and Wegman like hashing.
         values = np.bitwise_and((self._a * hv + self._b) % self._mersenne_prime, self._max_hash).astype(np.uint64)
