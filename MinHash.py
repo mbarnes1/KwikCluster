@@ -111,7 +111,6 @@ class MinHash(object):
                         print 'Reading document ' + str(doc_line) + '. Simultaneously hashing in parallel.'
                     if input_json:
                         json_object = json.loads(line)
-                        print json_object
                         tokens = json_object["_source"]['extracted_text']
                         doc_index = json_object["_id"]
                     else:
