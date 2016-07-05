@@ -178,7 +178,7 @@ class MinHash(object):
         :param token: String
         :return values:
         """
-        hv = int(sha1(token).hexdigest(), 16) % (10 ** 12)
+        hv = int(sha1(token.encode('utf-8')).hexdigest(), 16) % (10 ** 12)
         # Do Carter and Wegman like hashing.
         values = np.bitwise_and((self._a * hv + self._b) % self._mersenne_prime, self._max_hash).astype(np.uint64)
         return values
