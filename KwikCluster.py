@@ -17,11 +17,10 @@ def main(argv):
     header_lines = 0
     number_threads = 1
     max_lines = Inf
-    input_gzip = False
     input_json = False
-    helpline = 'test.py -i <inputfile> -o <outputfile> -d <numberheaderlines> -t <threshold> -f <numberhashfunctions> -c <numberthreads> -m <maxlines> -g <gzip> -j <json>'
+    helpline = 'test.py -i <inputfile> -o <outputfile> -d <numberheaderlines> -t <threshold> -f <numberhashfunctions> -c <numberthreads> -m <maxlines> -j <json>'
     try:
-        opts, args = getopt.getopt(argv, "h:i:o:d:t:f:c:m:g:j:", ["ifile=", "ofile=", "headerlines=", "threshold=", "hashfunctions=", "threads=", "maxlines=", "gzip=", "json="])
+        opts, args = getopt.getopt(argv, "h:i:o:d:t:f:c:m:j:", ["ifile=", "ofile=", "headerlines=", "threshold=", "hashfunctions=", "threads=", "maxlines=", "json="])
     except getopt.GetoptError:
         print helpline
         sys.exit(2)
@@ -43,12 +42,12 @@ def main(argv):
             number_threads = int(arg)
         elif opt in ("-m", "--maxlines"):
             max_lines = int(arg)
-        elif opt in ("-g", "--gzip"):
-            input_gzip = arg == 'True'
         elif opt in ("-j", "--json"):
             input_json = arg == 'True'
-    print input_json
-    print input_gzip
+    if input_file[-3:] == '.gz':
+        input_gzip = True
+    else:
+        input_gzip = False
     minhash = MinHash(number_hash_functions)
     bands = Banding(number_hash_functions, threshold, number_threads=number_threads)
     minhash.hash_corpus(input_file, headers=header_lines, number_threads=number_threads, max_lines=max_lines, input_json=input_json, input_gzip=input_gzip)
