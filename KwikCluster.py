@@ -152,7 +152,7 @@ def kwik_cluster_minhash(minhash, bands_original, threshold, destructive=True):
         bands.doc_to_bands[pivot_id] = pivot_bands
         pivot_bands = deepcopy(pivot_bands)
         clean(bands.doc_to_bands, bands.band_to_docs, pivot_id)
-        cluster = {pivot_id}
+        cluster = {minhash.line_to_index[pivot_id]}
         for band in pivot_bands:
             for doc_id in deepcopy(bands.band_to_docs[band]):
                 J = minhash.jaccard(pivot_id, doc_id)
