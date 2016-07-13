@@ -254,6 +254,17 @@ class Banding(object):
         """
         return self.doc_to_bands[doc_key]
 
+    def match_function(self, pivot_doc_key):
+        """
+        :param pivot_doc_key: Document ID
+        :return match_doc_keys: Set of all doc_keys in bands with pivot_doc_key. (includes pivot_doc_key)
+        """
+        bands = self.doc_to_bands[pivot_doc_key]
+        match_doc_keys = set()
+        for band in bands:
+            match_doc_keys.update(set(self.band_to_docs[band]))
+        return match_doc_keys
+
     @staticmethod
     def _calculate_bandwidth(number_hash_functions, threshold):
         """

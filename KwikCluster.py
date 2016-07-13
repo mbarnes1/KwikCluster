@@ -59,6 +59,24 @@ def main(argv):
             ins.write(line + '\n')
 
 
+def kwik_cluster(match_function, doc_indices):
+    """
+    KwikCluster (Ailon et al. 2008), with edges between any docs with at least one "feature"
+    :param match_function: Function handle. match_function(pivot_doc_index) returns set of all doc_indices with edge to pivot_doc_index
+    :param doc_indices: Set of doc indices to cluster
+    :return clusters: Frozen set of frozen sets, each subset contains doc ids in that cluster
+    """
+    clusters = set()
+    while doc_indices:
+        if len(clusters) % 100 == 0:
+            print 'KwikCluster on remaining ' + str(len(doc_indices)) + ' documents'
+        pivot_index = doc_indices.pop()
+        cluster = frozenset(match_function(pivot_index).add(pivot_index))
+        clusters.add(frozenset(cluster))
+    clusters = frozenset(clusters)
+    return clusters
+
+
 def kwik_cluster_dict(doc_to_features, destructive=True):
     """
     KwikCluster (Ailon et al. 2008), with edges between any docs with at least one "feature"
