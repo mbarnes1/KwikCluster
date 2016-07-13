@@ -66,15 +66,18 @@ def kwik_cluster(match_function, doc_indices):
     :param doc_indices: Set of doc indices to cluster
     :return clusters: Frozen set of frozen sets, each subset contains doc ids in that cluster
     """
+    print 'Running KwikCluster on documents...'
     clusters = set()
     while doc_indices:
         if len(clusters) % 100 == 0:
-            print 'KwikCluster on remaining ' + str(len(doc_indices)) + ' documents'
+            print '    KwikCluster on remaining ' + str(len(doc_indices)) + ' documents'
         pivot_index = doc_indices.pop()
-        cluster = match_function(pivot_index).add(pivot_index)
+        cluster = match_function(pivot_index)
+        cluster.add(pivot_index)
         doc_indices.difference_update(cluster)
         clusters.add(frozenset(cluster))
     clusters = frozenset(clusters)
+    print 'Clustered into ' + str(len(clusters)) + ' clusters'
     return clusters
 
 

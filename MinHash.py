@@ -90,7 +90,6 @@ class MinHash(object):
             [(random.randint(1, self._mersenne_prime), random.randint(0, self._mersenne_prime)) for _ in
              xrange(number_hash_functions)]).T
         self.signatures = dict()
-        self.line_to_index = dict()
         self._number_jobs = 0
         self._number_finished_jobs = 0
 
@@ -152,8 +151,7 @@ class MinHash(object):
                     break
 
     ## These functions (below) are the only ones necessary, files should be read in outside of MinHash.py
-    def add_document(self, doc_index, doc_line, document):
-        self.line_to_index[doc_line] = doc_index
+    def add_document(self, doc_line, document):
         self._job_queue.put((doc_line, document))
         self._number_jobs += 1
         if self._number_jobs > self._number_finished_jobs + 5000:
@@ -266,7 +264,7 @@ class Banding(object):
                 else:
                     self.band_to_docs[band] = {doc_id}
             if doc_id % 1000 == 0:
-                print 'Finished banding for doc ', str(doc_id)
+                print '    finished banding for doc ', str(doc_id)
         print 'Added ' + str(len(signatures)) + ' documents to the banding. Total of ' + str(self.number_bands) + ' bands with ' + str(self.number_docs_in_bands) + ' stored doc ids (including repeated elements in different bands.'
 
     def band_to_docs(self, band_key):
