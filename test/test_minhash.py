@@ -30,51 +30,40 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual((self.minhash.hash_document(doc1) == self.minhash.hash_document(doc2)).all(), False)
         np.testing.assert_array_equal(self.minhash.hash_document(doc1), self.minhash.hash_document(doc3))
 
+    def test_max_lines(self):
+        self.minhash.hash_corpus('test/synthetic.txt', headers=1, max_lines=12)
+        self.assertEqual(len(self.minhash.signatures), 12)
+
     def test_hash_corpus(self):
         self.minhash.hash_corpus('test/cranewife.txt', headers=1)
-        doc0 = frozenset('And under the boughs unbowed. All clothed in a snowy shroud. She had no heart so hardened. All under the boughs unbowed.'.split(' '))
-        doc1 = frozenset('Each feather it fell from skin. Till threadbare while she grew thin. How were my eyes so blinded? Each feather it fell from skin.'.split(' '))
+        doc0 = frozenset(
+            'And under the boughs unbowed. All clothed in a snowy shroud. She had no heart so hardened. All under the boughs unbowed.'.split(
+                ' '))
+        doc1 = frozenset(
+            'Each feather it fell from skin. Till threadbare while she grew thin. How were my eyes so blinded? Each feather it fell from skin.'.split(
+                ' '))
         doc2 = doc0
         np.testing.assert_array_equal(self.minhash.signatures[0], self.minhash.hash_document(doc0))
         np.testing.assert_array_equal(self.minhash.signatures[1], self.minhash.hash_document(doc1))
         np.testing.assert_array_equal(self.minhash.signatures[2], self.minhash.hash_document(doc2))
         self.assertEqual(len(self.minhash.signatures), 3)
 
-    def test_hash_corpus_list(self):
-        number_threads = 4
-        number_records = 100
-        minhash1 = deepcopy(self.minhash)
-        minhash2 = deepcopy(self.minhash)
-        _ = draw_synthetic(number_records, 10)
-        minhash1.hash_corpus('test/synthetic.txt', number_threads=1)
-        with open('test/synthetic.txt') as ins:
-            documents = [line for line in ins]
-        minhash2.hash_corpus_list(documents, number_threads=number_threads)
-        self.assertEqual(len(minhash1.signatures), len(minhash2.signatures))
-        for key, value in minhash1.signatures.iteritems():
-            print 'Testing doc ' + str(key)
-            np.testing.assert_array_equal(value, minhash2.signatures[key])
-
-    def test_max_lines(self):
-        self.minhash.hash_corpus('test/synthetic.txt', headers=1, max_lines=12)
-        self.assertEqual(len(self.minhash.signatures), 12)
-
     def test_corpus_multiprocessing(self):
-        number_threads = 10
+        number_processes = 10
         number_records = 1000
         number_tests = 1
-        minhash1 = deepcopy(self.minhash)
-        minhash2 = deepcopy(self.minhash)
+        minhash1 = MinHash(self.number_hash_functions, number_processes=1)
+        minhash2 = MinHash(self.number_hash_functions, number_processes=number_processes)
         _ = draw_synthetic(number_records, 50, output='test/synthetic.txt')
-        t = timeit.Timer(lambda: minhash1.hash_corpus('test/synthetic.txt', number_threads=1))
+        t = timeit.Timer(lambda: minhash1.hash_corpus('test/synthetic.txt'))
         duration_single = t.timeit(number=number_tests)
-        t = timeit.Timer(lambda: minhash2.hash_corpus('test/synthetic.txt', number_threads=number_threads))
+        t = timeit.Timer(lambda: minhash2.hash_corpus('test/synthetic.txt'))
         duration_multi = t.timeit(number=number_tests)
         self.assertEqual(len(minhash1.signatures), len(minhash2.signatures))
         for key, value in minhash1.signatures.iteritems():
             np.testing.assert_array_equal(value, minhash2.signatures[key])
         print 'Single process hashing time: ' + str(duration_single)
-        print str(number_threads) + '-process hashing time: ' + str(duration_multi)
+        print str(number_processes) + '-process hashing time: ' + str(duration_multi)
 
     def test_jaccard(self):
         doc1 = frozenset(['s'+str(i) for i in range(1, 1000)])

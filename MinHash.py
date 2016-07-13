@@ -46,36 +46,31 @@ class MinHash(object):
     """
     MinHash (Broder 1997)
     """
-    def __init__(self, number_hash_functions):
+    def __init__(self, number_hash_functions, number_processes=1):
         """
         :param number_hash_functions: Int >= 1
+        :param number_processes: Number of threads to hash documents with
         """
+        self._number_hash_functions = number_hash_functions
         self._mersenne_prime = (1 << 89) - 1  # (x << n) is x shifted left by n bit
         self._max_hash = maxint  # (1 << 64) - 1  # BARNES: Changed from 64 --> 62
+        self._number_processes = number_processes
+        self._worker_pool = list()
         random.seed(427)
-        self._a, self._b = np.array([(random.randint(1, self._mersenne_prime), random.randint(0, self._mersenne_prime)) for _ in xrange(number_hash_functions)]).T
-        self._number_hash_functions = number_hash_functions
+        self._a, self._b = np.array(
+            [(random.randint(1, self._mersenne_prime), random.randint(0, self._mersenne_prime)) for _ in
+             xrange(number_hash_functions)]).T
         self.signatures = dict()
         self.line_to_index = dict()
+        self._number_jobs = 0
+        self._number_finished_jobs = 0
 
-    def hash_corpus_list(self, documents, doc_id_0=0, number_threads=1, delimiter=' '):
-        """
-        Apply MinHash to pre-loaded document, add documents to dataset
-        :param documents: List of record texts
-        :param doc_id_0: Document id to assign to first document in file
-        :param number_threads: Number of threads to hash documents with
-        :param delimiter: String to split tokens by
-        """
-        jobs = []
-        job_ids = []
-        for doc_id, text in enumerate(documents):
-            tokens = frozenset(text.rstrip('\n').split(delimiter))
-            jobs.append(tokens)
-            job_ids.append(doc_id + doc_id_0)
-        p = multiprocessing.Pool(number_threads)
-        chunk_size = int(float(len(jobs)) / number_threads)
-        signatures = p.map(self.hash_document, jobs, chunk_size)
-        self.signatures = {doc_id: signature for doc_id, signature in izip(job_ids, signatures)}
+        self._job_queue = multiprocessing.Queue(10000)
+        self._results_queue = multiprocessing.Queue(20000)
+        for _ in range(self._number_processes):
+            w = Worker(self, self._job_queue, self._results_queue)
+            self._worker_pool.append(w)
+            w.start()
 
     def hash_corpus(self, file_name, delimiter=' ', headers=0, doc_id_0=0, number_threads=1, max_lines=np.Inf, input_gzip=False, input_json=False):
         """
@@ -95,15 +90,6 @@ class MinHash(object):
         else:
             ins = open(file_name, 'rb')
         if number_threads > 1:
-            job_queue = multiprocessing.Queue(10000)
-            results_queue = multiprocessing.Queue(20000)
-            worker_pool = list()
-            for _ in range(number_threads):
-                w = Worker(self, job_queue, results_queue)
-                worker_pool.append(w)
-                w.start()
-            number_jobs = 0
-            number_finished_jobs = 0
             for line in ins:
                 if doc_line >= doc_id_0:
                     if doc_line % 1000 == 0:
@@ -115,31 +101,9 @@ class MinHash(object):
                     else:
                         tokens = frozenset(line.rstrip('\n').split(delimiter))
                         doc_index = doc_line
-                    self.line_to_index[doc_line] = doc_index
-                    job_queue.put((doc_line, tokens))
-                    number_jobs += 1
-                    if number_jobs >= max_lines:
-                        break
-                    if number_jobs > number_finished_jobs + 5000:
-                        result = results_queue.get()
-                        self.signatures[result[0]] = result[1]
-                        number_finished_jobs += 1
-                        if number_finished_jobs % 1000 == 0:
-                            print 'Emptying Minhash results queue: ' + str(number_finished_jobs) + ' emptied results'
+                    self.add_document(doc_index, doc_line, tokens)
                 doc_line += 1
-            for _ in worker_pool:
-                job_queue.put(None)  # Sentinel objects to allow clean shutdown: 1 per worker.
-            while number_finished_jobs < number_jobs:
-                result = results_queue.get()
-                doc_line = result[0]
-                signature = result[1]
-                self.signatures[doc_line] = signature
-                number_finished_jobs += 1
-                if number_finished_jobs % 1000 == 0:
-                    print 'Emptying Minhash results queue: ' + str(number_finished_jobs) + ' of ' + str(number_jobs)
-            print 'Joining workers'
-            for worker in worker_pool:
-                worker.join()
+            self.finish()
         else:
             for line in ins:
                 if doc_line % 1000 == 0:
@@ -147,16 +111,43 @@ class MinHash(object):
                 if doc_line >= doc_id_0:
                     if input_json:
                         json_object = json.loads(line)
-                        tokens = json_object["_source"]['extracted_text']
+                        tokens = json_object["_source"]['extracted_text'].encode('utf-8')
                         doc_index = json_object["_id"]
                     else:
                         tokens = frozenset(line.rstrip('\n').split(delimiter))
                         doc_index = doc_line
                     self.signatures[doc_line] = self.hash_document(tokens)
-                self.line_to_index[doc_line] = doc_index
+                    self.line_to_index[doc_line] = doc_index
                 doc_line += 1
                 if doc_line-doc_id_0 >= max_lines:
                     break
+
+    ## These functions (below) are the only ones necessary, files should be read in outside of MinHash.py
+    def add_document(self, doc_index, doc_line, document):
+        self.line_to_index[doc_line] = doc_index
+        self._job_queue.put((doc_line, document))
+        self._number_jobs += 1
+        if self._number_jobs > self._number_finished_jobs + 5000:
+            result = self._results_queue.get()
+            self.signatures[result[0]] = result[1]
+            self._number_finished_jobs += 1
+            if self._number_finished_jobs % 1000 == 0:
+                print 'Emptying Minhash results queue: ' + str(self._number_finished_jobs) + ' emptied results'
+
+    def finish(self):
+        for _ in self._worker_pool:
+            self._job_queue.put(None)  # Sentinel objects to allow clean shutdown: 1 per worker.
+        while self._number_finished_jobs < self._number_jobs:
+            result = self._results_queue.get()
+            doc_line = result[0]
+            signature = result[1]
+            self.signatures[doc_line] = signature
+            self._number_finished_jobs += 1
+            if self._number_finished_jobs % 1000 == 0:
+                print 'Emptying Minhash results queue: ' + str(self._number_finished_jobs) + ' of ' + str(self._number_jobs)
+        print 'Joining workers'
+        for worker in self._worker_pool:
+            worker.join()
 
     def hash_document(self, document):
         """
@@ -176,8 +167,9 @@ class MinHash(object):
         :param token: String
         :return values:
         """
-        print type(token)
-        hv = int(sha1(token.encode('utf-8')).hexdigest(), 16) % (10 ** 12)
+        if type(token) is not str:
+            raise TypeError('Can only hash python string types')
+        hv = int(sha1(token).hexdigest(), 16) % (10 ** 12)
         # Do Carter and Wegman like hashing.
         values = np.bitwise_and((self._a * hv + self._b) % self._mersenne_prime, self._max_hash).astype(np.uint64)
         return values
