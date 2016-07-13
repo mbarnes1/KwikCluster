@@ -71,7 +71,8 @@ def kwik_cluster(match_function, doc_indices):
         if len(clusters) % 100 == 0:
             print 'KwikCluster on remaining ' + str(len(doc_indices)) + ' documents'
         pivot_index = doc_indices.pop()
-        cluster = frozenset(match_function(pivot_index).add(pivot_index))
+        cluster = match_function(pivot_index).add(pivot_index)
+        doc_indices.difference_update(cluster)
         clusters.add(frozenset(cluster))
     clusters = frozenset(clusters)
     return clusters

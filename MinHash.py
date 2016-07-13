@@ -13,6 +13,35 @@ import json
 __author__ = 'Benedikt Boecking and Matt Barnes'
 
 
+class JaccardMatchFunction(object):
+    """
+    Find all documents with Jaccard coefficient above threshold, in sub-linear time using MinHash + banding
+    """
+    def __init__(self, minhash, banding):
+        """
+        :param minhash: MinHash object
+        :param banding: Banding object
+        """
+        self._minhash = minhash
+        self._banding = banding
+
+    def match_function(self, pivot_doc_id):
+        """
+        Return all documents with Jaccard coefficient above threshold
+        :param pivot_doc_id: Document ID
+        :return matches: Set of all document ID's with Jaccard coefficient (w/ pivot_doc_id) above threshold. Includes pivot_doc_id.
+        """
+        bands = self._banding.doc_to_bands[pivot_doc_id]
+        in_bands_doc_ids = set()
+        for band in bands:
+            in_bands_doc_ids.update(set(self._banding.band_to_docs[band]))
+        matches = set()
+        for doc_id in in_bands_doc_ids:
+            if self._minhash.jaccard(pivot_doc_id, doc_id) > self._banding.get_threshold():
+                matches.add(doc_id)
+        return matches
+
+
 class Worker(multiprocessing.Process):
     """
     This is a multiprocessing worker, which when created starts another Python instance.
