@@ -30,41 +30,6 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual((self.minhash.hash_document(doc1) == self.minhash.hash_document(doc2)).all(), False)
         np.testing.assert_array_equal(self.minhash.hash_document(doc1), self.minhash.hash_document(doc3))
 
-    def test_max_lines(self):
-        self.minhash.hash_corpus('test/synthetic.txt', headers=1, max_lines=12)
-        self.assertEqual(len(self.minhash.signatures), 12)
-
-    def test_hash_corpus(self):
-        self.minhash.hash_corpus('test/cranewife.txt', headers=1)
-        doc0 = frozenset(
-            'And under the boughs unbowed. All clothed in a snowy shroud. She had no heart so hardened. All under the boughs unbowed.'.split(
-                ' '))
-        doc1 = frozenset(
-            'Each feather it fell from skin. Till threadbare while she grew thin. How were my eyes so blinded? Each feather it fell from skin.'.split(
-                ' '))
-        doc2 = doc0
-        np.testing.assert_array_equal(self.minhash.signatures[0], self.minhash.hash_document(doc0))
-        np.testing.assert_array_equal(self.minhash.signatures[1], self.minhash.hash_document(doc1))
-        np.testing.assert_array_equal(self.minhash.signatures[2], self.minhash.hash_document(doc2))
-        self.assertEqual(len(self.minhash.signatures), 3)
-
-    def test_corpus_multiprocessing(self):
-        number_processes = 10
-        number_records = 1000
-        number_tests = 1
-        minhash1 = MinHash(self.number_hash_functions, number_processes=1)
-        minhash2 = MinHash(self.number_hash_functions, number_processes=number_processes)
-        _ = draw_synthetic(number_records, 50, output='test/synthetic.txt')
-        t = timeit.Timer(lambda: minhash1.hash_corpus('test/synthetic.txt'))
-        duration_single = t.timeit(number=number_tests)
-        t = timeit.Timer(lambda: minhash2.hash_corpus('test/synthetic.txt'))
-        duration_multi = t.timeit(number=number_tests)
-        self.assertEqual(len(minhash1.signatures), len(minhash2.signatures))
-        for key, value in minhash1.signatures.iteritems():
-            np.testing.assert_array_equal(value, minhash2.signatures[key])
-        print 'Single process hashing time: ' + str(duration_single)
-        print str(number_processes) + '-process hashing time: ' + str(duration_multi)
-
     def test_jaccard(self):
         doc1 = frozenset(['s'+str(i) for i in range(1, 1000)])
         doc2 = frozenset(['s'+str(i) for i in range(300, 1100)])
@@ -88,7 +53,11 @@ class MyTestCase(unittest.TestCase):
         number_threads = 4
         number_records = 100
         _ = draw_synthetic(number_records, 20)
-        self.minhash.hash_corpus('test/synthetic.txt', headers=1, number_threads=5)
+        with open('test/synthetic.txt', 'rb') as ins:
+            for line_number, line in enumerate(ins):
+                tokens = line.split(' ')
+                self.minhash.add_document(line_number, tokens)
+        self.minhash.finish()
         banding1 = Banding(self.number_hash_functions, self.threshold, number_threads=1)
         banding2 = Banding(self.number_hash_functions, self.threshold, number_threads=number_threads)
         t = timeit.Timer(lambda: banding1.add_signatures(self.minhash.signatures))

@@ -1,7 +1,5 @@
-from copy import deepcopy
 import cProfile
-from MinHash import MinHash
-from MinHash import Banding
+from MinHash import MinHash, Banding, JaccardMatchFunction
 import sys
 import getopt
 from numpy import Inf
@@ -11,15 +9,18 @@ __author__ = 'Matt Barnes'
 
 
 def main(argv):
+    """
+    Cluster a plain text file, one document per line with unigram tokens.
+    :param argv: See below
+    :return:
+    """
     number_hash_functions = 200
     threshold = 0.9
-    header_lines = 0
-    number_threads = 1
+    number_processes = 1
     max_lines = Inf
-    input_json = False
-    helpline = 'test.py -i <inputfile> -o <outputfile> -d <numberheaderlines> -t <threshold> -f <numberhashfunctions> -c <numberthreads> -m <maxlines> -j <json>'
+    helpline = 'KwikCluster.py -i <inputfile> -o <outputfile> -t <threshold> -f <numberhashfunctions> -c <numberprocesses> -m <maxlines>'
     try:
-        opts, args = getopt.getopt(argv, "h:i:o:d:t:f:c:m:j:", ["ifile=", "ofile=", "headerlines=", "threshold=", "hashfunctions=", "threads=", "maxlines=", "json="])
+        opts, args = getopt.getopt(argv, "h:i:o:t:f:p:m:", ["ifile=", "ofile=", "threshold=", "hashfunctions=", "processes=", "maxlines="])
     except getopt.GetoptError:
         print helpline
         sys.exit(2)
@@ -31,27 +32,30 @@ def main(argv):
             input_file = arg
         elif opt in ("-o", "--ofile"):
             output_file = arg
-        elif opt in ("-d", "--headerlines"):
-            header_lines = int(arg)
         elif opt in ("-t", "--threshold"):
             threshold = float(arg)
         elif opt in ("-f", "--hashfunctions"):
             number_hash_functions = int(arg)
-        elif opt in ("-c", "--threads"):
-            number_threads = int(arg)
+        elif opt in ("-p", "--processes"):
+            number_processes = int(arg)
         elif opt in ("-m", "--maxlines"):
             max_lines = int(arg)
-        elif opt in ("-j", "--json"):
-            input_json = arg == 'True'
-    if input_file[-3:] == '.gz':
-        input_gzip = True
-    else:
-        input_gzip = False
     minhash = MinHash(number_hash_functions)
-    bands = Banding(number_hash_functions, threshold, number_threads=number_threads)
-    minhash.hash_corpus(input_file, headers=header_lines, number_threads=number_threads, max_lines=max_lines, input_json=input_json, input_gzip=input_gzip)
+    bands = Banding(number_hash_functions, threshold, number_processes=number_processes)
+    doc_ids_to_cluster = set()
+    with open(input_file, 'rb') as ins:
+        for line_number, line in enumerate(ins):
+            if line_number % 1000 == 0:
+                print 'Reading in document ' + str(line_number)
+            if line_number > max_lines:
+                break
+            doc_ids_to_cluster.add(line_number)
+            tokens = line.split(' ')
+            minhash.add_document(line_number, tokens)
+    minhash.finish()
     bands.add_signatures(minhash.signatures)
-    clusters = kwik_cluster_minhash(minhash, bands, threshold)
+    match_function = JaccardMatchFunction(minhash, bands).match_function
+    clusters = kwik_cluster(match_function, doc_ids_to_cluster)
     print 'Finished clustering. Found ', str(len(clusters)), ' clusters'
     with open(output_file, 'w') as ins:
         for cluster in clusters:
@@ -81,107 +85,53 @@ def kwik_cluster(match_function, doc_indices):
     return clusters
 
 
-def kwik_cluster_dict(doc_to_features, destructive=True):
+class ConsensusClusteringMatchFunction(object):
     """
-    KwikCluster (Ailon et al. 2008), with edges between any docs with at least one "feature"
-    :param doc_to_features: Dict of [doc id, set of features]
-    :param destructive: Whether to destructively operate on dicts
-    :return clusters: Frozen set of frozen sets, each subset contains doc ids in that cluster
+    Probabilistic match function, based on fraction of links across all clusterings
     """
-    if not destructive:
-        doc_to_features = deepcopy(doc_to_features)
-    feature_to_docs = dict()
-    for doc_id, features in doc_to_features.iteritems():
-        for feature in features:
-            if feature in feature_to_docs:
-                feature_to_docs[feature].add(doc_id)
-            else:
-                feature_to_docs[feature] = {doc_id}
-    clusters = set()
-    while doc_to_features:
-        if len(clusters) % 100 == 0:
-            print 'KwikCluster on remaining ' + str(len(doc_to_features)) + ' documents'
-        (pivot_id, pivot_features) = doc_to_features.popitem()
-        doc_to_features[pivot_id] = pivot_features
-        pivot_features = deepcopy(pivot_features)
-        clean(doc_to_features, feature_to_docs, pivot_id)
-        cluster = {pivot_id}
-        for feature in pivot_features:
-            for doc_id in deepcopy(feature_to_docs[feature]):
-                cluster.add(doc_id)
-                clean(doc_to_features, feature_to_docs, doc_id)
-        clusters.add(frozenset(cluster))
-    clusters = frozenset(clusters)
-    return clusters
+    def __init__(self, clusterings):
+        self.list_id_to_matches = []
+        for clustering in clusterings:
+            id_to_matches = dict()
+            for cluster in clustering:
+                for doc_id in cluster:
+                    id_to_matches[doc_id] = cluster
+            self.list_id_to_matches.append(id_to_matches)
+
+    def match_function(self, doc_id):
+        """
+        Returns all matching doc ids, probabilistically
+        :param doc_id:
+        :return matches: Set of matching doc ids (including doc_id
+        """
+        potential_matches = dict()
+        for id_to_matches in self.list_id_to_matches:
+            for potential_match in id_to_matches[doc_id]:
+                if potential_match in potential_matches:
+                    potential_matches[potential_match] += 1
+                else:
+                    potential_matches[potential_match] = 1
+        probs = float(len(self.list_id_to_matches))*random.uniform(size=len(potential_matches))
+        matches = set([doc_id])
+        for prob, (potential_match, count) in izip(probs, potential_matches.iteritems()):
+            if float(count)/float(len(self.list_id_to_matches)) > prob:
+                matches.add(potential_match)
+        matches.add(doc_id)
+        return matches
 
 
-def consensus_clustering(list_doc_to_links):
+def consensus_clustering(clusterings):
     """
     Consensus Clustering with KwikCluster (Ailon et al. 2008). An 11/7 approximation algorithm, in linear time
-    :param list_doc_to_links: List of all the clusterings to combine. Each clustering is a dictionary mapping every doc_id to a set of connected doc_ids
+    :param clusterings: List of clusterings, where each clustering is a frozen set of clusters (each cluster is a frozen set of doc ids)
     :return clusters: Frozen set of frozen sets, each subset contains doc ids in that cluster
     """
-    clustering1 = list_doc_to_links[0]
-    n_clusterings = len(list_doc_to_links)
-    clusters = []
-    removed = set()
-    while clustering1:
-        [pivot, pivot_links] = clustering1.popitem()
-        print(len(removed))
-        if pivot not in removed:
-            removed.add(pivot)
-            cluster = set([pivot])
-            links = dict()
-            for pivot_connection in pivot_links.difference(removed):
-                links[pivot_connection] = 1
-            for clustering in list_doc_to_links[1:]:
-                for link in clustering[pivot].difference(removed):
-                    if link in links:
-                        links[link] += 1
-                    else:
-                        links[link] = 1
-            probs = random.uniform(size=len(links))
-            for prob, (link, nlinks) in izip(probs, links.iteritems()):
-                if float(nlinks)/n_clusterings > prob:
-                    cluster.add(link)
-            removed.update(cluster)
-            clusters.append(frozenset(cluster))
-    clusters = frozenset(clusters)
-    return clusters
-
-
-def kwik_cluster_minhash(minhash, bands_original, threshold, destructive=True):
-    """
-    KwikCluster (Ailon et al. 2008) using MinHash (Broder1997)
-    :param minhash: MinHash object
-    :param bands_original: Banding object
-    :param threshold: Threshold to cluster at, >= bands.threshold
-    :param destructive: Whether to destructively operate on bands (faster)
-    :return clusters: Frozen set of frozen sets, each subset contains doc indexes in that cluster
-    """
-    if threshold < bands_original.get_threshold():
-        raise ValueError('Clustering threshold must be greater than or equal to threshold band threshold to find all matches with high probability')
-    if destructive:
-        bands = bands_original
-    else:
-        bands = deepcopy(bands_original)
-    clusters = set()
-    while bands.doc_to_bands:
-        if len(clusters) % 100 == 0:
-            print 'KwikCluster on remaining ' + str(len(bands.doc_to_bands)) + ' documents'
-        (pivot_id, pivot_bands) = bands.doc_to_bands.popitem()
-        bands.doc_to_bands[pivot_id] = pivot_bands
-        pivot_bands = deepcopy(pivot_bands)
-        clean(bands.doc_to_bands, bands.band_to_docs, pivot_id)
-        cluster = {minhash.line_to_index[pivot_id]}
-        for band in pivot_bands:
-            for doc_id in deepcopy(bands.band_to_docs[band]):
-                J = minhash.jaccard(pivot_id, doc_id)
-                if J >= threshold:
-                    cluster.add(minhash.line_to_index[doc_id])
-                    clean(bands.doc_to_bands, bands.band_to_docs, doc_id)
-        clusters.add(frozenset(cluster))
-    clusters = frozenset(clusters)
+    doc_ids = set()
+    for clustering in clusterings:
+        for cluster in clustering:
+            doc_ids.update(set(cluster))
+    match_function = ConsensusClusteringMatchFunction(clusterings).match_function
+    clusters = kwik_cluster(match_function, doc_ids)
     return clusters
 
 

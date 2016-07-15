@@ -1,7 +1,5 @@
 import unittest
-from CorrelationClustering.KwikCluster import kwik_cluster_minhash, kwik_cluster_dict
-from CorrelationClustering.KwikCluster import clean
-from CorrelationClustering.KwikCluster import clusters_to_labels
+from CorrelationClustering.KwikCluster import kwik_cluster, clusters_to_labels, consensus_clustering, JaccardMatchFunction
 from CorrelationClustering import MinHash
 from draw_synthetic import draw_synthetic
 __author__ = 'mbarnes1'
@@ -16,7 +14,11 @@ class MyTestCase(unittest.TestCase):
         dataset = 'test/synthetic.txt'
         _, self.labels = draw_synthetic(self.number_records, number_clusters, output=dataset)
         self.minhash = MinHash.MinHash(number_hash_functions)
-        self.minhash.hash_corpus(dataset)
+        with open(dataset, 'rb') as ins:
+            for line_number, line in enumerate(ins):
+                tokens = line.split(' ')
+                self.minhash.add_document(line_number, tokens)
+        self.minhash.finish()
         self.banding = MinHash.Banding(number_hash_functions, self.threshold)
         self.banding.add_signatures(self.minhash.signatures)
 
@@ -31,17 +33,10 @@ class MyTestCase(unittest.TestCase):
         self.assertNotEqual(labels[1], labels[8])
         self.assertNotEqual(labels[1], labels[5])
 
-    def test_clean(self):
-        self.assertEqual(len(self.banding.doc_to_bands), self.number_records)
-        self.assertIn(3, self.banding.doc_to_bands)
-        clean(self.banding.doc_to_bands, self.banding.band_to_docs, 3)
-        self.assertEqual(len(self.banding.doc_to_bands), self.number_records-1)
-        self.assertNotIn(3, self.banding.doc_to_bands)
-        for band, doc_ids in self.banding.band_to_docs.iteritems():
-            self.assertNotIn(3, doc_ids)
-
     def test_kwikcluster_minhash(self):
-        predicted_clusters = kwik_cluster_minhash(self.minhash, self.banding, self.threshold)
+        match_function = JaccardMatchFunction(self.minhash, self.banding).match_function
+        doc_ids = set(self.minhash.signatures.keys())
+        predicted_clusters = kwik_cluster(match_function, doc_ids)
         true_clusters = dict()
         for doc_id, label in self.labels.iteritems():
             if label in true_clusters:
@@ -51,15 +46,15 @@ class MyTestCase(unittest.TestCase):
         true_clusters = frozenset([frozenset(docs) for _, docs in true_clusters.iteritems()])
         self.assertEqual(predicted_clusters, true_clusters)
 
-    def test_kwikcluster_dict(self):
-        doc_to_features = { '0': {'a', 'b', 'c'},
-            '1': {'a'},
-            '2': {'d', 'e'},
-            '3': {'e', 'f'},
-        }
-        predicted_clusters = kwik_cluster_dict(doc_to_features)
-        true_clusters = frozenset({
-            frozenset(['0', '1']),
-            frozenset(['2', '3'])
-        })
-        self.assertSetEqual(predicted_clusters, true_clusters)
+    def test_consensus_clustering(self):
+        clustering1 = frozenset([frozenset([1, 2, 3, 4]), frozenset([5, 6, 7])])
+        clustering2 = frozenset([frozenset([1, 2, 3]), frozenset([4, 5, 6, 7])])
+        clustering3 = frozenset([frozenset([1, 2]), frozenset([3, 4, 5, 6, 7])])
+        clusterings = [clustering1, clustering2, clustering3]
+        clustering = consensus_clustering(clusterings)
+        n_matches = 0
+        for cluster in clustering:
+            if (1 in cluster and 2 in cluster) or (5 in cluster and 6 in cluster and 7 in cluster):
+                n_matches += 1
+        self.assertEqual(n_matches, 2)
+

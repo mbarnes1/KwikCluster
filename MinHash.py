@@ -3,13 +3,10 @@ import random
 from hashlib import sha1
 from scipy.spatial.distance import hamming
 import multiprocessing
-from itertools import izip
 from functools import partial
 import copy_reg
 import types
 from sys import maxint
-import gzip
-import json
 __author__ = 'Benedikt Boecking and Matt Barnes'
 
 
@@ -78,7 +75,7 @@ class MinHash(object):
     def __init__(self, number_hash_functions, number_processes=1):
         """
         :param number_hash_functions: Int >= 1
-        :param number_processes: Number of threads to hash documents with
+        :param number_processes: Number of processes to hash documents with
         """
         self._number_hash_functions = number_hash_functions
         self._mersenne_prime = (1 << 89) - 1  # (x << n) is x shifted left by n bit
@@ -100,57 +97,6 @@ class MinHash(object):
             self._worker_pool.append(w)
             w.start()
 
-    def hash_corpus(self, file_name, delimiter=' ', headers=0, doc_id_0=0, number_threads=1, max_lines=np.Inf, input_gzip=False, input_json=False):
-        """
-        Apply MinHash to a raw text file, add documents to dataset
-        :param file_name: String, path to file name
-        :param delimiter: String to split tokens by
-        :param headers: Number of header lines in file
-        :param doc_id_0: Document id to assign to first document in file
-        :param number_threads: Number of threads to hash documents with
-        :param max_lines: Maximum number of lines to read in from file
-        :param input_gzip: Boolean, whether input is a gzip file
-        :param input_json: Boolean, whether input is a json file
-        """
-        doc_line = doc_id_0 - headers
-        if input_gzip:
-            ins = gzip.GzipFile(file_name, 'rb')
-        else:
-            ins = open(file_name, 'rb')
-        if number_threads > 1:
-            for line in ins:
-                if doc_line >= doc_id_0:
-                    if doc_line % 1000 == 0:
-                        print 'Reading document ' + str(doc_line) + '. Simultaneously hashing in parallel.'
-                    if input_json:
-                        json_object = json.loads(line)
-                        tokens = json_object["_source"]['extracted_text']
-                        doc_index = json_object["_id"]
-                    else:
-                        tokens = frozenset(line.rstrip('\n').split(delimiter))
-                        doc_index = doc_line
-                    self.add_document(doc_index, doc_line, tokens)
-                doc_line += 1
-            self.finish()
-        else:
-            for line in ins:
-                if doc_line % 1000 == 0:
-                    print 'Adding document ' + str(doc_line) + ' to corpus'
-                if doc_line >= doc_id_0:
-                    if input_json:
-                        json_object = json.loads(line)
-                        tokens = json_object["_source"]['extracted_text'].encode('utf-8')
-                        doc_index = json_object["_id"]
-                    else:
-                        tokens = frozenset(line.rstrip('\n').split(delimiter))
-                        doc_index = doc_line
-                    self.signatures[doc_line] = self.hash_document(tokens)
-                    self.line_to_index[doc_line] = doc_index
-                doc_line += 1
-                if doc_line-doc_id_0 >= max_lines:
-                    break
-
-    ## These functions (below) are the only ones necessary, files should be read in outside of MinHash.py
     def add_document(self, doc_line, document):
         self._job_queue.put((doc_line, document))
         self._number_jobs += 1
@@ -216,13 +162,13 @@ class Banding(object):
     """
     Banding the MinHash signatures for quickly finding neighbors
     """
-    def __init__(self, number_hash_functions, threshold, number_threads=1):
+    def __init__(self, number_hash_functions, threshold, number_processes=1):
         """
         :param number_hash_functions: Integer, number of hash functions
         :param threshold: Jaccard threshold in [0, 1]
-        :param number_threads: For multiprocessing
+        :param number_processes: For multiprocessing
         """
-        self.pool = multiprocessing.Pool(number_threads)
+        self.pool = multiprocessing.Pool(number_processes)
         self._threshold = threshold
         bandwidth = self._calculate_bandwidth(number_hash_functions, self._threshold)
         self._number_bands_per_doc = number_hash_functions / bandwidth
@@ -250,7 +196,7 @@ class Banding(object):
         Add multiple signatures to the banding
         :param signatures: Dictionary of [doc id, signature]
         """
-        chunk_size = min(int(float(len(signatures))/self.pool._processes), 1000)
+        chunk_size = max(1, min(int(float(len(signatures))/self.pool._processes), 1000))
         function = partial(compute_bands, self._number_bands_per_doc)
         print 'Computing bands...'
         for doc_id, bands in self.pool.imap_unordered(function, signatures.iteritems(), chunk_size):
@@ -319,8 +265,8 @@ class Banding(object):
 def compute_bands(number_bands_per_doc, docid_signature):
     """
     Compute bands of a signature
-    :param signature: numpy vector of a single document's minhash signature
-    :param number_bands_per_doc:
+    :param number_bands_per_doc
+    :param docid_signature: Tuple of (doc_id, numpy vector of a document's minhash signature)
     :return bands: List of document bands
     """
     docid = docid_signature[0]
