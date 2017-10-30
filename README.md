@@ -30,11 +30,11 @@ optional arguments:
                         Maximum number of lines to read from input-file-path.
 ```
 
-## Standard usage
-For custom document feeding and custom match functions, see `example.py`.
+## More than basic usage
+For custom document feeding and match functions, see `example.py`.
 
 ## Consensus clustering
-This package also implements *consensus clustering*, which combines multiple clusterings according to [1]. For an example, see `example_consensus.py`.
+This package also implements *consensus clustering*, which combines multiple clusterings into a single clustering according to the objective in [1]. For an example usage, see `example_consensus.py`.
 
 ### References:
 1. Ailon, N., Charikar, M., & Newman, A. (2008). Aggregating inconsistent information. Journal of the ACM, 55(5),1–27. http://doi.org/10.1145/1411509.1411513
