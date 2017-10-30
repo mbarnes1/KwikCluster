@@ -1,0 +1,8 @@
+# OSX system files
+*.DS_Store
+
+# PyCharm IDE files
+*.idea
+
+# python build files
+*.pyc
