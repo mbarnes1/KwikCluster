@@ -1,5 +1,5 @@
 # KwikCluster
-KwikCluster [ailon](#ailon) [1] using MinHash [2] as a match function.
+KwikCluster [[1]](#ailon) using MinHash [[1]](#broder) as a match function.
 
 ## Basic usage with flat text files:
 ```
@@ -40,4 +40,4 @@ This package also implements *consensus clustering*, which combines multiple clu
 
 ### References:
 1. <a name="ailon"></a>Ailon, N., Charikar, M., & Newman, A. (2008). Aggregating inconsistent information. Journal of the ACM, 55(5),1–27. http://doi.org/10.1145/1411509.1411513
-2. Broder, A. Z. (1997). On the resemblance and containment of documents. Proceedings. Compression and Complexity of SEQUENCES 1997 (Cat. No.97TB100171), 1–9. http://doi.org/10.1109/SEQUEN.1997.666900
+2. <a name="broder"></a>Broder, A. Z. (1997). On the resemblance and containment of documents. Proceedings. Compression and Complexity of SEQUENCES 1997 (Cat. No.97TB100171), 1–9. http://doi.org/10.1109/SEQUEN.1997.666900
