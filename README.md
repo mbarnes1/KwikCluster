@@ -2,7 +2,7 @@
 KwikCluster [1] using MinHash [2] as a match function.
 
 ## Basic usage with flat text files:
-
+```
 usage: KwikCluster.py [-h] [--threshold THRESHOLD]
                       [--number-hash-functions NUMBER_HASH_FUNCTIONS]
                       [--number-processes NUMBER_PROCESSES]
@@ -28,7 +28,7 @@ optional arguments:
                         Number of parallel processes for hashing documents.
   --max-lines MAX_LINES
                         Maximum number of lines to read from input-file-path.
-
+```
 
 ## Standard usage
 For custom document feeding and custom match functions, see `example.py`.
