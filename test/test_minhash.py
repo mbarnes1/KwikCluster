@@ -1,9 +1,10 @@
-import unittest
-from CorrelationClustering.MinHash import MinHash, Banding
-import numpy as np
-from copy import deepcopy
-import timeit
 from draw_synthetic import draw_synthetic
+from MinHash import MinHash, Banding
+import numpy as np
+import timeit
+import unittest
+
+
 __author__ = 'mbarnes1'
 
 
@@ -12,7 +13,11 @@ class MyTestCase(unittest.TestCase):
         self.number_hash_functions = 200
         self.threshold = 0.8
         self.minhash = MinHash(self.number_hash_functions)
-        self.banding = Banding(self.number_hash_functions, self.threshold, number_threads=2)
+        self.banding = Banding(self.number_hash_functions, self.threshold, number_processes=2)
+
+    def tearDown(self):
+        self.minhash.finish()
+        self.banding.close()
 
     def test_hash_token(self):
         h1 = self.minhash._hash_token('hello')
@@ -53,17 +58,18 @@ class MyTestCase(unittest.TestCase):
         number_threads = 4
         number_records = 100
         _ = draw_synthetic(number_records, 20)
-        with open('test/synthetic.txt', 'rb') as ins:
+        with open('synthetic.txt', 'rb') as ins:
             for line_number, line in enumerate(ins):
                 tokens = line.split(' ')
                 self.minhash.add_document(line_number, tokens)
-        self.minhash.finish()
-        banding1 = Banding(self.number_hash_functions, self.threshold, number_threads=1)
-        banding2 = Banding(self.number_hash_functions, self.threshold, number_threads=number_threads)
+        banding1 = Banding(self.number_hash_functions, self.threshold, number_processes=1)
+        banding2 = Banding(self.number_hash_functions, self.threshold, number_processes=number_threads)
         t = timeit.Timer(lambda: banding1.add_signatures(self.minhash.signatures))
         duration_single = t.timeit(number=number_tests)
         t = timeit.Timer(lambda: banding2.add_signatures(self.minhash.signatures))
         duration_multi = t.timeit(number=number_tests)
+        banding1.close()
+        banding2.close()
         self.assertEqual(len(banding1.doc_to_bands), len(self.minhash.signatures))
         for key, value in banding1.band_to_docs.iteritems():
             self.assertSetEqual(value, banding2.band_to_docs[key])
@@ -71,5 +77,6 @@ class MyTestCase(unittest.TestCase):
             self.assertSetEqual(value, banding2.doc_to_bands[key])
         print 'Single process banding time: ' + str(duration_single)
         print str(number_threads) + '-process banding time: ' + str(duration_multi)
+
 
     #def test_calculate_bandwidth(self):

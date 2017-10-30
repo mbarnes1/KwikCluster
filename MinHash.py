@@ -184,6 +184,12 @@ class Banding(object):
     def number_docs_in_bands(self):
         return len(self.doc_to_bands)*self._number_bands_per_doc
 
+    def close(self):
+        """
+        Shut down multiprocessing pool. Will not be able to add new signatures after calling this function.
+        """
+        self.pool.close()
+
     def get_threshold(self):
         """
         Returns the threshold bands were created at

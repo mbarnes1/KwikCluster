@@ -1,26 +1,14 @@
-import unittest
-from CorrelationClustering.KwikCluster import kwik_cluster, clusters_to_labels, consensus_clustering, JaccardMatchFunction
-from CorrelationClustering import MinHash
 from draw_synthetic import draw_synthetic
+from KwikCluster import kwik_cluster, clusters_to_labels, consensus_clustering, JaccardMatchFunction, ConsensusClusteringMatchFunction
+from MinHash import MinHash, Banding
+import Queue
+import unittest
 __author__ = 'mbarnes1'
 
 
 class MyTestCase(unittest.TestCase):
     def setUp(self):
-        number_clusters = 2
-        self.number_records = 100
-        number_hash_functions = 200
-        self.threshold = 0.05
-        dataset = 'test/synthetic.txt'
-        _, self.labels = draw_synthetic(self.number_records, number_clusters, output=dataset)
-        self.minhash = MinHash.MinHash(number_hash_functions)
-        with open(dataset, 'rb') as ins:
-            for line_number, line in enumerate(ins):
-                tokens = line.split(' ')
-                self.minhash.add_document(line_number, tokens)
-        self.minhash.finish()
-        self.banding = MinHash.Banding(number_hash_functions, self.threshold)
-        self.banding.add_signatures(self.minhash.signatures)
+        pass
 
     def test_clusters_to_labels(self):
         clusters = [[1, 2, 3], [8, 9, 10], [5, 6]]
@@ -34,11 +22,26 @@ class MyTestCase(unittest.TestCase):
         self.assertNotEqual(labels[1], labels[5])
 
     def test_kwikcluster_minhash(self):
-        match_function = JaccardMatchFunction(self.minhash, self.banding).match_function
-        doc_ids = set(self.minhash.signatures.keys())
+        number_clusters = 2
+        number_records = 100
+        number_hash_functions = 200
+        threshold = 0.05
+        dataset = 'synthetic.txt'
+        _, labels = draw_synthetic(number_records, number_clusters, output=dataset)
+        minhash = MinHash(number_hash_functions)
+        with open(dataset, 'rb') as ins:
+            for line_number, line in enumerate(ins):
+                tokens = line.split(' ')
+                minhash.add_document(line_number, tokens)
+        minhash.finish()
+        banding = Banding(number_hash_functions, threshold)
+        banding.add_signatures(minhash.signatures)
+
+        match_function = JaccardMatchFunction(minhash, banding).match_function
+        doc_ids = set(minhash.signatures.keys())
         predicted_clusters = kwik_cluster(match_function, doc_ids)
         true_clusters = dict()
-        for doc_id, label in self.labels.iteritems():
+        for doc_id, label in labels.iteritems():
             if label in true_clusters:
                 true_clusters[label].add(doc_id)
             else:
@@ -46,15 +49,32 @@ class MyTestCase(unittest.TestCase):
         true_clusters = frozenset([frozenset(docs) for _, docs in true_clusters.iteritems()])
         self.assertEqual(predicted_clusters, true_clusters)
 
+    def test_consensus_match_function(self):
+        clustering1 = frozenset([frozenset([1, 2, 3]), frozenset([4, 5])])
+        clustering2 = frozenset([frozenset([1, 2]), frozenset([3, 4, 5])])
+        clusterings = [clustering1, clustering2]
+        match_function = ConsensusClusteringMatchFunction(clusterings).match_function
+        self.assertTrue(any([match_function(1) == frozenset([1, 2]), match_function(1) == frozenset([1, 2, 3])]))
+        self.assertTrue(any([match_function(5) == frozenset([4, 5]), match_function(5) == frozenset([3, 4, 5])]))
+
     def test_consensus_clustering(self):
-        clustering1 = frozenset([frozenset([1, 2, 3, 4]), frozenset([5, 6, 7])])
-        clustering2 = frozenset([frozenset([1, 2, 3]), frozenset([4, 5, 6, 7])])
-        clustering3 = frozenset([frozenset([1, 2]), frozenset([3, 4, 5, 6, 7])])
-        clusterings = [clustering1, clustering2, clustering3]
-        clustering = consensus_clustering(clusterings)
-        n_matches = 0
+        clustering1 = frozenset([frozenset([1, 2, 3]), frozenset([4, 5])])
+        clustering2 = frozenset([frozenset([1, 2]), frozenset([3, 4, 5])])
+        clusterings = [clustering1, clustering2]
+        queue = Queue.Queue()
+        queue.put(1)
+        queue.put(4)
+        clustering = consensus_clustering(clusterings, seed_queue=queue)
+        self.assertTrue(any([
+            frozenset([1, 2]) in clustering,
+            frozenset([1, 2, 3]) in clustering
+        ]))
+        self.assertTrue(any([
+            frozenset([4, 5]) in clustering,
+            frozenset([3, 4, 5]) in clustering
+        ]))
+        all_ids = set()
         for cluster in clustering:
-            if (1 in cluster and 2 in cluster) or (5 in cluster and 6 in cluster and 7 in cluster):
-                n_matches += 1
-        self.assertEqual(n_matches, 2)
+            all_ids.update(cluster)
+        self.assertEqual(all_ids, {1, 2, 3, 4, 5})
 

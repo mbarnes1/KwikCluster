@@ -1,10 +1,10 @@
-import cProfile
-from MinHash import MinHash, Banding, JaccardMatchFunction
-import sys
-import getopt
-from numpy import Inf
-from numpy import random
+import argparse
 from itertools import izip
+from MinHash import MinHash, Banding, JaccardMatchFunction
+from numpy import Inf, random
+import sys
+
+
 __author__ = 'Matt Barnes'
 
 
@@ -14,40 +14,51 @@ def main(argv):
     :param argv: See below
     :return:
     """
-    number_hash_functions = 200
-    threshold = 0.9
-    number_processes = 1
-    max_lines = Inf
-    helpline = 'KwikCluster.py -i <inputfile> -o <outputfile> -t <threshold> -f <numberhashfunctions> -c <numberprocesses> -m <maxlines>'
-    try:
-        opts, args = getopt.getopt(argv, "h:i:o:t:f:p:m:", ["ifile=", "ofile=", "threshold=", "hashfunctions=", "processes=", "maxlines="])
-    except getopt.GetoptError:
-        print helpline
-        sys.exit(2)
-    for opt, arg in opts:
-        if opt == '-h':
-            print helpline
-            sys.exit()
-        elif opt in ("-i", "--ifile"):
-            input_file = arg
-        elif opt in ("-o", "--ofile"):
-            output_file = arg
-        elif opt in ("-t", "--threshold"):
-            threshold = float(arg)
-        elif opt in ("-f", "--hashfunctions"):
-            number_hash_functions = int(arg)
-        elif opt in ("-p", "--processes"):
-            number_processes = int(arg)
-        elif opt in ("-m", "--maxlines"):
-            max_lines = int(arg)
-    minhash = MinHash(number_hash_functions)
-    bands = Banding(number_hash_functions, threshold, number_processes=number_processes)
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("input_file_path",
+                        type=str,
+                        help="Path to text file to cluster. One document per line.")
+
+    parser.add_argument("output_file_path",
+                        type=str,
+                        help="Path to output cluster results. One cluster per line, with space-delimited cluster "
+                             "members referenced according to zero-indexed line number in input-file-path.")
+
+    parser.add_argument("--threshold",
+                        type=float,
+                        default=0.9,
+                        help="Jaccard score cutoff threshold for a match between two documents.")
+
+    parser.add_argument("--number-hash-functions",
+                        type=int,
+                        default=200,
+                        help="Jaccard score cutoff threshold for a match between two documents.")
+
+    parser.add_argument("--number-processes",
+                        type=int,
+                        default=1,
+                        help="Number of parallel processes for hashing documents.")
+
+    parser.add_argument("--max-lines",
+                        type=int,
+                        default=Inf,
+                        help="Maximum number of lines to read from input-file-path.")
+
+    args = parser.parse_args(argv)
+
+    kwik_cluster_text_file(args)
+
+
+def kwik_cluster_text_file(args):
+    minhash = MinHash(args.number_hash_functions)
+    bands = Banding(args.number_hash_functions, args.threshold, number_processes=args.number_processes)
     doc_ids_to_cluster = set()
-    with open(input_file, 'rb') as ins:
+    with open(args.input_file_path, 'rb') as ins:
         for line_number, line in enumerate(ins):
             if line_number % 1000 == 0:
                 print 'Reading in document ' + str(line_number)
-            if line_number > max_lines:
+            if line_number > args.max_lines:
                 break
             doc_ids_to_cluster.add(line_number)
             tokens = line.split(' ')
@@ -57,17 +68,18 @@ def main(argv):
     match_function = JaccardMatchFunction(minhash, bands).match_function
     clusters = kwik_cluster(match_function, doc_ids_to_cluster)
     print 'Finished clustering. Found ', str(len(clusters)), ' clusters'
-    with open(output_file, 'w') as ins:
+    with open(args.output_file_path, 'w') as ins:
         for cluster in clusters:
             line = ' '.join([str(doc_index) for doc_index in cluster])
             ins.write(line + '\n')
 
 
-def kwik_cluster(match_function, doc_indices):
+def kwik_cluster(match_function, doc_indices, seed_queue=None):
     """
     KwikCluster (Ailon et al. 2008), with edges between any docs with at least one "feature"
     :param match_function: Function handle. match_function(pivot_doc_index) returns set of all doc_indices with edge to pivot_doc_index
     :param doc_indices: Set of doc indices to cluster
+    :param seed_queue: [Queue] Pop indices in this order (if possible). If none, pop randomly
     :return clusters: Frozen set of frozen sets, each subset contains doc ids in that cluster
     """
     print 'Running KwikCluster on documents...'
@@ -75,7 +87,12 @@ def kwik_cluster(match_function, doc_indices):
     while doc_indices:
         if len(clusters) % 100 == 0:
             print '    KwikCluster on remaining ' + str(len(doc_indices)) + ' documents'
-        pivot_index = doc_indices.pop()
+        while seed_queue and not seed_queue.empty():
+            pivot_index = seed_queue.get()
+            if pivot_index in doc_indices:
+                break
+        else:  # seed is empty
+            pivot_index = doc_indices.pop()
         cluster = match_function(pivot_index).intersection(doc_indices)
         cluster.add(pivot_index)
         doc_indices.difference_update(cluster)
@@ -111,7 +128,7 @@ class ConsensusClusteringMatchFunction(object):
                     potential_matches[potential_match] += 1
                 else:
                     potential_matches[potential_match] = 1
-        probs = float(len(self.list_id_to_matches))*random.uniform(size=len(potential_matches))
+        probs = random.uniform(size=len(potential_matches))
         matches = set([doc_id])
         for prob, (potential_match, count) in izip(probs, potential_matches.iteritems()):
             if float(count)/float(len(self.list_id_to_matches)) > prob:
@@ -120,18 +137,19 @@ class ConsensusClusteringMatchFunction(object):
         return matches
 
 
-def consensus_clustering(clusterings):
+def consensus_clustering(clusterings, seed_queue=None):
     """
     Consensus Clustering with KwikCluster (Ailon et al. 2008). An 11/7 approximation algorithm, in linear time
     :param clusterings: List of clusterings, where each clustering is a frozen set of clusters (each cluster is a frozen set of doc ids)
+    :param seed_queue: [Queue] Pop indices in this order (if possible). If none, pop randomly
     :return clusters: Frozen set of frozen sets, each subset contains doc ids in that cluster
     """
     doc_ids = set()
     for clustering in clusterings:
         for cluster in clustering:
             doc_ids.update(set(cluster))
-    match_function = ConsensusClusteringMatchFunction(clusterings).match_function
-    clusters = kwik_cluster(match_function, doc_ids)
+    match_function = ConsensusClusteringMatchFunction(clusterings)
+    clusters = kwik_cluster(match_function.match_function, doc_ids, seed_queue=seed_queue)
     return clusters
 
 
@@ -160,6 +178,6 @@ def clean(doc_to_features, feature_to_docs, doc_id):
 
 
 if __name__ == '__main__':
-    cProfile.run('main(sys.argv[1:])')
+    main(sys.argv[1:])
 
 

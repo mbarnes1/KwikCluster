@@ -1,22 +1,41 @@
 # KwikCluster
-KwikCluster [Ailon2008] using MinHash [Broeder1997] as a match function.
+KwikCluster [1] using MinHash [2] as a match function.
 
-python2.7 KwikCluster.py -i \<inputfile\> -o \<outputfile\> -d \<numberheaderlines\> -t \<threshold\> -f \<numberhashfunctions\> -c \<numberthreads\> -m \<maxlines\>
+## Basic usage with flat text files:
 
-## Inputs:
+usage: KwikCluster.py [-h] [--threshold THRESHOLD]
+                      [--number-hash-functions NUMBER_HASH_FUNCTIONS]
+                      [--number-processes NUMBER_PROCESSES]
+                      [--max-lines MAX_LINES]
+                      input_file_path output_file_path
 
--i \<inputfile\> - Path to raw flat text file, with one sample per line
+positional arguments:
+  input_file_path       Path to text file to cluster. One document per line.
+  output_file_path      Path to output cluster results. One cluster per line,
+                        with space-delimited cluster members referenced
+                        according to zero-indexed line number in input-file-
+                        path.
 
--d \<numberheaderlines\> - Number of header lines in the input file to skip. Default = 0
+optional arguments:
+  -h, --help            show this help message and exit
+  --threshold THRESHOLD
+                        Jaccard score cutoff threshold for a match between two
+                        documents.
+  --number-hash-functions NUMBER_HASH_FUNCTIONS
+                        Jaccard score cutoff threshold for a match between two
+                        documents.
+  --number-processes NUMBER_PROCESSES
+                        Number of parallel processes for hashing documents.
+  --max-lines MAX_LINES
+                        Maximum number of lines to read from input-file-path.
 
--m \<maxlines\> - Max number of lines to use from \<inputfile\>
 
--t \<threshold\> - Jaccard similarity cut-off threshold. Default = 0.9.
+## Standard usage
+For custom document feeding and custom match functions, see `example.py`.
 
--f \<numberhashfunctions\> - Number of hash functions to use in MinHash approximation to the Jaccard coefficient. Default = 200.
+## Consensus clustering
+This package also implements *consensus clustering*, which combines multiple clusterings according to [1]. For an example, see `example_consensus.py`.
 
--c \<numberthreads\> - Number of processes to run in parallel. Default = 1.
-
-## Outputs:
-
--o \<outputfile\> - Name of output file to create. Each line corresponds to a cluster, as a list of zero-indexed document line numbers in \<inputfile\>
+### References:
+1. Ailon, N., Charikar, M., & Newman, A. (2008). Aggregating inconsistent information. Journal of the ACM, 55(5),1–27. http://doi.org/10.1145/1411509.1411513
+2. Broder, A. Z. (1997). On the resemblance and containment of documents. Proceedings. Compression and Complexity of SEQUENCES 1997 (Cat. No.97TB100171), 1–9. http://doi.org/10.1109/SEQUEN.1997.666900
