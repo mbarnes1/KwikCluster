@@ -1,5 +1,5 @@
 # KwikCluster
-KwikCluster [[1]](#ailon) using MinHash [[2]](#broder) as a match function.
+KwikCluster [[1]](#ailon) using MinHash [[2]](#broder) as a match function. Generally speaking, this package clusters text documents such that similar documents are in the same cluster and dissimilar documents are in different clusters, where similarity is measured according to the Jaccard coefficient. The computational time of this process scales ***linearly*** with respect to the number of documents, which enables clustering of massive corpuses.
 
 ## Basic usage with flat text files:
 ```
@@ -33,7 +33,7 @@ optional arguments:
 ```
 
 ## More than basic usage
-For custom document feeding and match functions, see `example.py`.
+For custom document feeding and match functions, see the simple tutorial in `example.py`.
 
 ## Consensus clustering
 This package also implements *consensus clustering*, which combines multiple clusterings into a single clustering according to the objective in [[1]](#ailon). For an example usage, see `example_consensus.py`.
