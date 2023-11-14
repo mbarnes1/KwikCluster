@@ -1,5 +1,4 @@
 import argparse
-from itertools import izip
 from MinHash import MinHash, Banding, JaccardMatchFunction
 from numpy import Inf, random
 import sys
@@ -57,7 +56,7 @@ def kwik_cluster_text_file(args):
     with open(args.input_file_path, 'rb') as ins:
         for line_number, line in enumerate(ins):
             if line_number % 1000 == 0:
-                print 'Reading in document ' + str(line_number)
+                print('Reading in document ' + str(line_number))
             if line_number > args.max_lines:
                 break
             doc_ids_to_cluster.add(line_number)
@@ -67,7 +66,7 @@ def kwik_cluster_text_file(args):
     bands.add_signatures(minhash.signatures)
     match_function = JaccardMatchFunction(minhash, bands).match_function
     clusters = kwik_cluster(match_function, doc_ids_to_cluster)
-    print 'Finished clustering. Found ', str(len(clusters)), ' clusters'
+    print('Finished clustering. Found ', str(len(clusters)), ' clusters')
     with open(args.output_file_path, 'w') as ins:
         for cluster in clusters:
             line = ' '.join([str(doc_index) for doc_index in cluster])
@@ -82,11 +81,11 @@ def kwik_cluster(match_function, doc_indices, seed_queue=None):
     :param seed_queue: [Queue] Pop indices in this order (if possible). If none, pop randomly
     :return clusters: Frozen set of frozen sets, each subset contains doc ids in that cluster
     """
-    print 'Running KwikCluster on documents...'
+    print('Running KwikCluster on documents...')
     clusters = set()
     while doc_indices:
         if len(clusters) % 100 == 0:
-            print '    KwikCluster on remaining ' + str(len(doc_indices)) + ' documents'
+            print('    KwikCluster on remaining ' + str(len(doc_indices)) + ' documents')
         while seed_queue and not seed_queue.empty():
             pivot_index = seed_queue.get()
             if pivot_index in doc_indices:
@@ -98,7 +97,7 @@ def kwik_cluster(match_function, doc_indices, seed_queue=None):
         doc_indices.difference_update(cluster)
         clusters.add(frozenset(cluster))
     clusters = frozenset(clusters)
-    print 'Clustered into ' + str(len(clusters)) + ' clusters'
+    print('Clustered into ' + str(len(clusters)) + ' clusters')
     return clusters
 
 
@@ -130,7 +129,7 @@ class ConsensusClusteringMatchFunction(object):
                     potential_matches[potential_match] = 1
         probs = random.uniform(size=len(potential_matches))
         matches = set([doc_id])
-        for prob, (potential_match, count) in izip(probs, potential_matches.iteritems()):
+        for prob, (potential_match, count) in zip(probs, potential_matches.iteritems()):
             if float(count)/float(len(self.list_id_to_matches)) > prob:
                 matches.add(potential_match)
         matches.add(doc_id)

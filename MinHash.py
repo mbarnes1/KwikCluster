@@ -4,9 +4,9 @@ from hashlib import sha1
 from scipy.spatial.distance import hamming
 import multiprocessing
 from functools import partial
-import copy_reg
+import copyreg
 import types
-from sys import maxint
+import math
 __author__ = 'Benedikt Boecking and Matt Barnes'
 
 
@@ -59,13 +59,13 @@ class Worker(multiprocessing.Process):
         self.minhash = minhash
 
     def run(self):
-        print 'Worker started'
+        print('Worker started')
         for job in iter(self.job_queue.get, None):
             doc_id = job[0]
             tokens = job[1]
             signature = self.minhash.hash_document(tokens)
             self.results_queue.put((doc_id, signature))
-        print 'Worker exiting'
+        print('Worker exiting')
 
 
 class MinHash(object):
@@ -79,13 +79,13 @@ class MinHash(object):
         """
         self._number_hash_functions = number_hash_functions
         self._mersenne_prime = (1 << 89) - 1  # (x << n) is x shifted left by n bit
-        self._max_hash = maxint  # (1 << 64) - 1  # BARNES: Changed from 64 --> 62
+        self._max_hash = (1 << 62) - 1 # (1 << 64) - 1  # BARNES: Changed from 64 --> 62
         self._number_processes = number_processes
         self._worker_pool = list()
         random.seed(427)
         self._a, self._b = np.array(
             [(random.randint(1, self._mersenne_prime), random.randint(0, self._mersenne_prime)) for _ in
-             xrange(number_hash_functions)]).T
+             range(number_hash_functions)]).T
         self.signatures = dict()
         self._number_jobs = 0
         self._number_finished_jobs = 0
@@ -105,7 +105,7 @@ class MinHash(object):
             self.signatures[result[0]] = result[1]
             self._number_finished_jobs += 1
             if self._number_finished_jobs % 1000 == 0:
-                print 'Emptying Minhash results queue: ' + str(self._number_finished_jobs) + ' emptied results'
+                print('Emptying Minhash results queue: ' + str(self._number_finished_jobs) + ' emptied results')
 
     def finish(self):
         for _ in self._worker_pool:
@@ -117,8 +117,8 @@ class MinHash(object):
             self.signatures[doc_line] = signature
             self._number_finished_jobs += 1
             if self._number_finished_jobs % 1000 == 0:
-                print 'Emptying Minhash results queue: ' + str(self._number_finished_jobs) + ' of ' + str(self._number_jobs)
-        print 'Joining workers'
+                print('Emptying Minhash results queue: ' + str(self._number_finished_jobs) + ' of ' + str(self._number_jobs))
+        print('Joining workers')
         for worker in self._worker_pool:
             worker.join()
 
@@ -142,7 +142,7 @@ class MinHash(object):
         """
         if type(token) is not str:
             raise TypeError('Can only hash python string types')
-        hv = int(sha1(token).hexdigest(), 16) % (10 ** 12)
+        hv = int(sha1(token.encode('utf-8')).hexdigest(), 16) % (10 ** 12)
         # Do Carter and Wegman like hashing.
         values = np.bitwise_and((self._a * hv + self._b) % self._mersenne_prime, self._max_hash).astype(np.uint64)
         return values
@@ -174,7 +174,7 @@ class Banding(object):
         self._number_bands_per_doc = number_hash_functions / bandwidth
         self.band_to_docs = dict()
         self.doc_to_bands = dict()
-        print 'Initialized bands with ' + str(self._number_bands_per_doc) + ' bands per document.'
+        print('Initialized bands with ' + str(self._number_bands_per_doc) + ' bands per document.')
 
     @property
     def number_bands(self):
@@ -204,8 +204,8 @@ class Banding(object):
         """
         chunk_size = max(1, min(int(float(len(signatures))/self.pool._processes), 1000))
         function = partial(compute_bands, self._number_bands_per_doc)
-        print 'Computing bands...'
-        for doc_id, bands in self.pool.imap_unordered(function, signatures.iteritems(), chunk_size):
+        print('Computing bands...')
+        for doc_id, bands in self.pool.imap_unordered(function, signatures.items(), chunk_size):
             if doc_id not in self.doc_to_bands:
                 self.doc_to_bands[doc_id] = bands
             else:
@@ -216,8 +216,8 @@ class Banding(object):
                 else:
                     self.band_to_docs[band] = {doc_id}
             if doc_id % 1000 == 0:
-                print '    finished banding for doc ', str(doc_id)
-        print 'Added ' + str(len(signatures)) + ' documents to the banding. Total of ' + str(self.number_bands) + ' bands with ' + str(self.number_docs_in_bands) + ' stored doc ids (including repeated elements in different bands.'
+                print('    finished banding for doc ', str(doc_id))
+        print('Added ' + str(len(signatures)) + ' documents to the banding. Total of ' + str(self.number_bands) + ' bands with ' + str(self.number_docs_in_bands) + ' stored doc ids (including repeated elements in different bands.)')
 
     def band_to_docs(self, band_key):
         """
@@ -256,7 +256,7 @@ class Banding(object):
         """
         best = number_hash_functions, 1
         minerr = float("inf")
-        for r in xrange(1, number_hash_functions + 1):
+        for r in range(1, number_hash_functions + 1):
             try:
                 b = 1. / (threshold ** r)
             except:
@@ -279,7 +279,8 @@ def compute_bands(number_bands_per_doc, docid_signature):
     signature = docid_signature[1]
     bands = set()
     for i, raw_band in enumerate(np.array_split(signature, number_bands_per_doc)):
-        band = sha1("ab" + str(raw_band) + "ba" + str(i)).digest()
+        string = ("ab" + str(raw_band) + "ba" + str(i)).encode('utf-8')
+        band = sha1(string).digest()
         bands.add(band)
     return docid, bands
 
@@ -307,4 +308,4 @@ def _unpickle_method(func_name, obj, cls):
             break
     return func.__get__(obj, cls)
 
-copy_reg.pickle(types.MethodType, _pickle_method, _unpickle_method)
+copyreg.pickle(types.MethodType, _pickle_method, _unpickle_method)
