@@ -22,7 +22,7 @@ def main():
     bands.add_signatures(minhash.signatures)
     match_function = JaccardMatchFunction(minhash, bands).match_function
     clusters = kwik_cluster(match_function, doc_ids)
-    print 'Finished with ', str(len(clusters)), ' clusters'
+    print ('Finished with ', str(len(clusters)), ' clusters')
 
 
 if __name__ == '__main__':
